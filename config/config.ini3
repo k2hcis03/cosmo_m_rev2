@@ -1,0 +1,632 @@
+#공통
+[common]
+    MAXUNITBOARD = 2
+    HOST = 192.168.0.13       
+    # HOST = 192.168.0.18      
+    # Send 
+    PORT1 = 7000
+    # Receive
+    PORT2 = 7001
+    GPIOADDR = 0x20
+    SHARED_MEMORY_SIZE = 30
+    BLEND_TANK = 0
+    FERMEN_TANK = 1
+    PROD_TANK = 0
+    CHILER_TANK = 0
+    JSON_FILE = /home/pi/Projects/cosmo-m/data/JSON_Ref_Stage101.txt
+#발효 0
+[unit_board0]
+    # 관리 프로그램에서 사용하는 ID
+    TANK_ID = 100
+    # CAN FD ID
+    ADDRESS = 0x300
+    # ADDRESS = 0xFFF
+    #MOTOR ID, 255는 사용하지 않음.
+    MOTOR_ID = 1
+    #ADC channel           
+    TEMP1_ADC = 0
+    #ADC channel               
+    TEMP2_ADC = 1           
+    #상단 0도 ADC값
+    TEMP1_0 = 330           
+    #상단 77도 ADC값
+    TEMP1_77_5 = 3866       
+    #하단 0도 ADC값
+    TEMP2_0 = 330           
+    #하단 77도 ADC값
+    TEMP2_77_5 = 3866       
+    #GPIO 0 상단 솔밸브 릴레이 번호
+    SOLVALVE1 = 1                     
+    #GPIO 1 하단 솔밸브 릴레이 번호
+    SOLVALVE2 = 2           
+    #최대 모터 속도
+    MAX_RPM = 500           
+    #최소 모터 속도
+    MIN_RPM = 100  
+    #삼상 모터 슬립 속도         
+    SLEEP_SPEED = 130  
+    #외부 온도계 MOD BUS ID, 255는 사용하지 않음.     
+    # EXT_TEMP1_ID = 255
+    EXT_TEMP1_ID = 3
+    #외부 온도계 MOD BUS ID, 255는 사용하지 않음.      
+    # EXT_TEMP2_ID = 255
+    EXT_TEMP2_ID = 2
+
+    TEMP_NUM = 4
+    HUMI_NUM = 2
+    CO2_NUM = 0
+    VALVE_NUM = 2
+    MOTOR_NUM = 1
+    LOAD_CELL = 1
+
+#발효 1
+[unit_board1] 
+    # 관리 프로그램에서 사용하는 ID
+    TANK_ID = 101
+    # CAN FD ID  
+    # ADDRESS = 0x301
+    ADDRESS = 0xFFF
+    #MOTOR ID, 0xFF는 사용하지 않음.
+    MOTOR_ID = 1 
+    #ADC channel           
+    TEMP1_ADC = 0
+    #ADC channel               
+    TEMP2_ADC = 1           
+    #상단 0도 ADC값
+    TEMP1_0 = 330           
+    #상단 77도 ADC값
+    TEMP1_77_5 = 3866       
+    #하단 0도 ADC값
+    TEMP2_0 = 330           
+    #하단 77도 ADC값
+    TEMP2_77_5 = 3866       
+    #GPIO 0 상단 솔밸브 릴레이 번호 현재 물 유입
+    SOLVALVE1 = 1                     
+    #GPIO 1 하단 솔밸브 릴레이 번호 현재 냉각수
+    SOLVALVE2 = 2       
+    #최대 모터 속도
+    MAX_RPM = 500           
+    #최소 모터 속도
+    MIN_RPM = 100  
+    #삼상 모터 슬립 속도         
+    SLEEP_SPEED = 130  
+    #외부 온도계 MOD BUS ID, 0xFF는 사용하지 않음.     
+    EXT_TEMP1_ID = 2  
+    #외부 온도계 MOD BUS ID, 0xFF는 사용하지 않음.      
+    EXT_TEMP2_ID = 3 
+
+    TEMP_NUM = 4
+    HUMI_NUM = 2
+    CO2_NUM = 0
+    VALVE_NUM = 2
+    MOTOR_NUM = 1
+    LOAD_CELL = 1
+
+#발효 2
+[unit_board2]
+    # 관리 프로그램에서 사용하는 ID
+    TANK_ID = 102
+    # CAN FD ID
+    ADDRESS = 0x302
+    #MOTOR ID, 0xFF는 사용하지 않음.
+    MOTOR_ID = 1 
+    #ADC channel           
+    TEMP1_ADC = 0
+    #ADC channel               
+    TEMP2_ADC = 1           
+    #상단 0도 ADC값
+    TEMP1_0 = 330           
+    #상단 77도 ADC값
+    TEMP1_77_5 = 3866       
+    #하단 0도 ADC값
+    TEMP2_0 = 330           
+    #하단 77도 ADC값
+    TEMP2_77_5 = 3866       
+    #GPIO 0 상단 솔밸브 릴레이 번호 현재 물 유입
+    SOLVALVE1 = 1                     
+    #GPIO 1 하단 솔밸브 릴레이 번호 현재 냉각수
+    SOLVALVE2 = 2         
+    #최대 모터 속도
+    MAX_RPM = 500           
+    #최소 모터 속도
+    MIN_RPM = 100  
+    #삼상 모터 슬립 속도         
+    SLEEP_SPEED = 130  
+    #외부 온도계 MOD BUS ID, 0xFF는 사용하지 않음.     
+    EXT_TEMP1_ID = 2  
+    #외부 온도계 MOD BUS ID, 0xFF는 사용하지 않음.      
+    EXT_TEMP2_ID = 3 
+
+    TEMP_NUM = 4
+    HUMI_NUM = 2
+    CO2_NUM = 0
+    VALVE_NUM = 2
+    MOTOR_NUM = 1
+    LOAD_CELL = 1
+
+#발효 3
+[unit_board3]
+    # 관리 프로그램에서 사용하는 ID
+    TANK_ID = 103
+    # CAN FD ID
+    ADDRESS = 0x303
+    #MOTOR ID, 0xFF는 사용하지 않음.
+    MOTOR_ID = 1 
+    #ADC channel           
+    TEMP1_ADC = 0
+    #ADC channel               
+    TEMP2_ADC = 1           
+    #상단 0도 ADC값
+    TEMP1_0 = 330           
+    #상단 77도 ADC값
+    TEMP1_77_5 = 3866       
+    #하단 0도 ADC값
+    TEMP2_0 = 330           
+    #하단 77도 ADC값
+    TEMP2_77_5 = 3866       
+    #GPIO 0 상단 솔밸브 릴레이 번호 현재 물 유입
+    SOLVALVE1 = 1                     
+    #GPIO 1 하단 솔밸브 릴레이 번호 현재 냉각수
+    SOLVALVE2 = 2          
+    #최대 모터 속도
+    MAX_RPM = 500           
+    #최소 모터 속도
+    MIN_RPM = 100  
+    #삼상 모터 슬립 속도         
+    SLEEP_SPEED = 130  
+    #외부 온도계 MOD BUS ID, 0xFF는 사용하지 않음.     
+    EXT_TEMP1_ID = 2  
+    #외부 온도계 MOD BUS ID, 0xFF는 사용하지 않음.      
+    EXT_TEMP2_ID = 3 
+
+    TEMP_NUM = 4
+    HUMI_NUM = 2
+    CO2_NUM = 0
+    VALVE_NUM = 2
+    MOTOR_NUM = 1
+    LOAD_CELL = 1
+
+#숙성 1
+[unit_board4]  
+    # 관리 프로그램에서 사용하는 ID
+    TANK_ID = 200
+    # CAN FD ID 
+    ADDRESS = 0x304
+    #MOTOR ID, 0xFF는 사용하지 않음.
+    MOTOR_ID = 1 
+    #ADC channel           
+    TEMP1_ADC = 0
+    #ADC channel               
+    TEMP2_ADC = 1           
+    #상단 0도 ADC값
+    TEMP1_0 = 330           
+    #상단 77도 ADC값
+    TEMP1_77_5 = 3866       
+    #하단 0도 ADC값
+    TEMP2_0 = 330           
+    #하단 77도 ADC값
+    TEMP2_77_5 = 3866       
+    #GPIO 0 상단 솔밸브 릴레이 번호 현재 물 유입
+    SOLVALVE1 = 1                     
+    #GPIO 1 하단 솔밸브 릴레이 번호 현재 냉각수
+    SOLVALVE2 = 2          
+    #최대 모터 속도
+    MAX_RPM = 500           
+    #최소 모터 속도
+    MIN_RPM = 100  
+    #삼상 모터 슬립 속도         
+    SLEEP_SPEED = 130  
+    #외부 온도계 MOD BUS ID, 0xFF는 사용하지 않음.     
+    EXT_TEMP1_ID = 2  
+    #외부 온도계 MOD BUS ID, 0xFF는 사용하지 않음.      
+    EXT_TEMP2_ID = 3
+
+    TEMP_NUM = 2
+    HUMI_NUM = 0
+    CO2_NUM = 0
+    VALVE_NUM = 2
+    MOTOR_NUM = 1
+    LOAD_CELL = 1 
+
+#숙성 2
+[unit_board5]  
+    # 관리 프로그램에서 사용하는 ID
+    TANK_ID = 201
+    # CAN FD ID 
+    ADDRESS = 0x305
+    #MOTOR ID, 0xFF는 사용하지 않음.
+    MOTOR_ID = 1 
+    #ADC channel           
+    TEMP1_ADC = 0
+    #ADC channel               
+    TEMP2_ADC = 1           
+    #상단 0도 ADC값
+    TEMP1_0 = 330           
+    #상단 77도 ADC값
+    TEMP1_77_5 = 3866       
+    #하단 0도 ADC값
+    TEMP2_0 = 330           
+    #하단 77도 ADC값
+    TEMP2_77_5 = 3866       
+    #GPIO 0 상단 솔밸브 릴레이 번호 현재 물 유입
+    SOLVALVE1 = 1                     
+    #GPIO 1 하단 솔밸브 릴레이 번호 현재 냉각수
+    SOLVALVE2 = 2         
+    #최대 모터 속도
+    MAX_RPM = 500           
+    #최소 모터 속도
+    MIN_RPM = 100  
+    #삼상 모터 슬립 속도         
+    SLEEP_SPEED = 130  
+    #외부 온도계 MOD BUS ID, 0xFF는 사용하지 않음.     
+    EXT_TEMP1_ID = 2  
+    #외부 온도계 MOD BUS ID, 0xFF는 사용하지 않음.      
+    EXT_TEMP2_ID = 3
+
+    TEMP_NUM = 2
+    HUMI_NUM = 0
+    CO2_NUM = 0
+    VALVE_NUM = 2
+    MOTOR_NUM = 1
+    LOAD_CELL = 1 
+
+#제품 1
+[unit_board6] 
+    # 관리 프로그램에서 사용하는 ID
+    TANK_ID = 300
+    # CAN FD ID   
+    ADDRESS = 0x306
+    #MOTOR ID, 0xFF는 사용하지 않음.
+    MOTOR_ID = 0xFF
+    #ADC channel           
+    TEMP1_ADC = 0
+    #ADC channel               
+    TEMP2_ADC = 1           
+    #상단 0도 ADC값
+    TEMP1_0 = 330           
+    #상단 77도 ADC값
+    TEMP1_77_5 = 3866       
+    #하단 0도 ADC값
+    TEMP2_0 = 330           
+    #하단 77도 ADC값
+    TEMP2_77_5 = 3866       
+    #GPIO 0 상단 솔밸브 릴레이 번호 현재 물 유입
+    SOLVALVE1 = 1                     
+    #GPIO 1 하단 솔밸브 릴레이 번호 현재 냉각수
+    SOLVALVE2 = 2           
+    #최대 모터 속도
+    MAX_RPM = 500           
+    #최소 모터 속도
+    MIN_RPM = 100  
+    #삼상 모터 슬립 속도         
+    SLEEP_SPEED = 130  
+    #외부 온도계 MOD BUS ID, 0xFF는 사용하지 않음.     
+    EXT_TEMP1_ID = 0xFF  
+    #외부 온도계 MOD BUS ID, 0xFF는 사용하지 않음.      
+    EXT_TEMP2_ID = 0xFF
+
+    TEMP_NUM = 1
+    HUMI_NUM = 0
+    CO2_NUM = 0
+    VALVE_NUM = 0
+    MOTOR_NUM = 0
+    LOAD_CELL = 0 
+
+#제품 2
+[unit_board7] 
+    # 관리 프로그램에서 사용하는 ID
+    TANK_ID = 301
+    # CAN FD ID      
+    ADDRESS = 0x307   
+    #MOTOR ID, 0xFF는 사용하지 않음.
+    MOTOR_ID = 0xFF 
+    #ADC channel           
+    TEMP1_ADC = 0
+    #ADC channel               
+    TEMP2_ADC = 1           
+    #상단 0도 ADC값
+    TEMP1_0 = 330           
+    #상단 77도 ADC값
+    TEMP1_77_5 = 3866       
+    #하단 0도 ADC값
+    TEMP2_0 = 330           
+    #하단 77도 ADC값
+    TEMP2_77_5 = 3866       
+    #GPIO 0 상단 솔밸브 릴레이 번호 현재 물 유입
+    SOLVALVE1 = 1                     
+    #GPIO 1 하단 솔밸브 릴레이 번호 현재 냉각수
+    SOLVALVE2 = 2          
+    #최대 모터 속도
+    MAX_RPM = 500           
+    #최소 모터 속도
+    MIN_RPM = 100  
+    #삼상 모터 슬립 속도         
+    SLEEP_SPEED = 130  
+    #외부 온도계 MOD BUS ID, 0xFF는 사용하지 않음.     
+    EXT_TEMP1_ID = 0xFF 
+    #외부 온도계 MOD BUS ID, 0xFF는 사용하지 않음.      
+    EXT_TEMP2_ID = 0xFF 
+
+    TEMP_NUM = 1
+    HUMI_NUM = 0
+    CO2_NUM = 0
+    VALVE_NUM = 0
+    MOTOR_NUM = 0
+    LOAD_CELL = 0 
+
+#제품 3
+[unit_board8]
+    # 관리 프로그램에서 사용하는 ID
+    TANK_ID = 302
+    # CAN FD ID 
+    ADDRESS = 0x308 
+    #MOTOR ID, 0xFF는 사용하지 않음.
+    MOTOR_ID = 0xFF 
+    #ADC channel           
+    TEMP1_ADC = 0
+    #ADC channel               
+    TEMP2_ADC = 1           
+    #상단 0도 ADC값
+    TEMP1_0 = 330           
+    #상단 77도 ADC값
+    TEMP1_77_5 = 3866       
+    #하단 0도 ADC값
+    TEMP2_0 = 330           
+    #하단 77도 ADC값
+    TEMP2_77_5 = 3866       
+    #GPIO 0 상단 솔밸브 릴레이 번호 현재 물 유입
+    SOLVALVE1 = 1                     
+    #GPIO 1 하단 솔밸브 릴레이 번호 현재 냉각수
+    SOLVALVE2 = 2          
+    #최대 모터 속도
+    MAX_RPM = 500           
+    #최소 모터 속도
+    MIN_RPM = 100  
+    #삼상 모터 슬립 속도         
+    SLEEP_SPEED = 130  
+    #외부 온도계 MOD BUS ID, 0xFF는 사용하지 않음.     
+    EXT_TEMP1_ID = 0xFF  
+    #외부 온도계 MOD BUS ID, 0xFF는 사용하지 않음.      
+    EXT_TEMP2_ID = 0xFF는
+    
+    TEMP_NUM = 1
+    HUMI_NUM = 0
+    CO2_NUM = 0
+    VALVE_NUM = 0
+    MOTOR_NUM = 0
+    LOAD_CELL = 0
+
+#칠러 1
+[unit_board9]
+    # 관리 프로그램에서 사용하는 ID
+    TANK_ID = 400
+    # CAN FD ID 
+    ADDRESS = 0x309
+    #MOTOR ID, 0xFF는 사용하지 않음.
+    MOTOR_ID = 0xFF
+    #ADC channel           
+    TEMP1_ADC = 0
+    #ADC channel               
+    TEMP2_ADC = 1           
+    #상단 0도 ADC값
+    TEMP1_0 = 330           
+    #상단 77도 ADC값
+    TEMP1_77_5 = 3866       
+    #하단 0도 ADC값
+    TEMP2_0 = 330           
+    #하단 77도 ADC값
+    TEMP2_77_5 = 3866       
+    #GPIO 0 상단 솔밸브 릴레이 번호 현재 물 유입
+    SOLVALVE1 = 1                     
+    #GPIO 1 하단 솔밸브 릴레이 번호 현재 냉각수
+    SOLVALVE2 = 2            
+    #최대 모터 속도
+    MAX_RPM = 500           
+    #최소 모터 속도
+    MIN_RPM = 100  
+    #삼상 모터 슬립 속도         
+    SLEEP_SPEED = 130  
+    #외부 온도계 MOD BUS ID, 0xFF는 사용하지 않음.     
+    EXT_TEMP1_ID = 0xFF  
+    #외부 온도계 MOD BUS ID, 0xFF는 사용하지 않음.      
+    EXT_TEMP2_ID = 0xFF는
+    
+    TEMP_NUM = 1
+    HUMI_NUM = 0
+    CO2_NUM = 0
+    VALVE_NUM = 0
+    MOTOR_NUM = 0
+    LOAD_CELL = 0
+
+[unit_board10]
+    # 관리 프로그램에서 사용하는 ID
+    TANK_ID = 900
+    # CAN FD ID
+    ADDRESS = 0x30A 
+    #MOTOR ID, 0xFF는 사용하지 않음.
+    MOTOR_ID = 0xFF 
+    #ADC channel           
+    TEMP1_ADC = 0
+    #ADC channel               
+    TEMP2_ADC = 1           
+    #상단 0도 ADC값
+    TEMP1_0 = 330           
+    #상단 77도 ADC값
+    TEMP1_77_5 = 3866       
+    #하단 0도 ADC값
+    TEMP2_0 = 330           
+    #하단 77도 ADC값
+    TEMP2_77_5 = 3866       
+    #GPIO 0 상단 솔밸브 릴레이 번호 현재 물 유입
+    SOLVALVE1 = 1                     
+    #GPIO 1 하단 솔밸브 릴레이 번호 현재 냉각수
+    SOLVALVE2 = 2           
+    #최대 모터 속도
+    MAX_RPM = 500           
+    #최소 모터 속도
+    MIN_RPM = 100  
+    #삼상 모터 슬립 속도         
+    SLEEP_SPEED = 130  
+    #외부 온도계 MOD BUS ID, 0xFF는 사용하지 않음.     
+    EXT_TEMP1_ID = 0xFF  
+    #외부 온도계 MOD BUS ID, 0xFF는 사용하지 않음.      
+    EXT_TEMP2_ID = 0xFF는
+    
+    TEMP_NUM = 1
+    HUMI_NUM = 0
+    CO2_NUM = 0
+    VALVE_NUM = 0
+    MOTOR_NUM = 0
+    LOAD_CELL = 0
+
+[unit_board11]
+    ADDRESS = 0x30B 
+    #MOTOR ID, 0xFF는 사용하지 않음.
+    MOTOR_ID = 0xFF 
+    #ADC channel           
+    TEMP1_ADC = 0
+    #ADC channel               
+    TEMP2_ADC = 1           
+    #상단 0도 ADC값
+    TEMP1_0 = 330           
+    #상단 77도 ADC값
+    TEMP1_77_5 = 3866       
+    #하단 0도 ADC값
+    TEMP2_0 = 330           
+    #하단 77도 ADC값
+    TEMP2_77_5 = 3866       
+    #GPIO 0 상단 솔밸브 릴레이 번호 현재 물 유입
+    SOLVALVE1 = 1                     
+    #GPIO 1 하단 솔밸브 릴레이 번호 현재 냉각수
+    SOLVALVE2 = 2         
+    #최대 모터 속도
+    MAX_RPM = 500           
+    #최소 모터 속도
+    MIN_RPM = 100  
+    #삼상 모터 슬립 속도         
+    SLEEP_SPEED = 130  
+    #외부 온도계 MOD BUS ID, 0xFF는 사용하지 않음.     
+    EXT_TEMP1_ID = 0xFF  
+    #외부 온도계 MOD BUS ID, 0xFF는 사용하지 않음.      
+    EXT_TEMP2_ID = 0xFF는
+    
+    TEMP_NUM = 1
+    HUMI_NUM = 0
+    CO2_NUM = 0
+    VALVE_NUM = 0
+    MOTOR_NUM = 0
+    LOAD_CELL = 0
+
+[unit_board12]
+    ADDRESS = 0x30C 
+    #MOTOR ID, 0xFF는 사용하지 않음.
+    MOTOR_ID = 0xFF 
+    #ADC channel           
+    TEMP1_ADC = 0
+    #ADC channel               
+    TEMP2_ADC = 1           
+    #상단 0도 ADC값
+    TEMP1_0 = 330           
+    #상단 77도 ADC값
+    TEMP1_77_5 = 3866       
+    #하단 0도 ADC값
+    TEMP2_0 = 330           
+    #하단 77도 ADC값
+    TEMP2_77_5 = 3866       
+    #GPIO 0 상단 솔밸브 릴레이 번호 현재 물 유입
+    SOLVALVE1 = 1                     
+    #GPIO 1 하단 솔밸브 릴레이 번호 현재 냉각수
+    SOLVALVE2 = 2          
+    #최대 모터 속도
+    MAX_RPM = 500           
+    #최소 모터 속도
+    MIN_RPM = 100  
+    #삼상 모터 슬립 속도         
+    SLEEP_SPEED = 130  
+    #외부 온도계 MOD BUS ID, 0xFF는 사용하지 않음.     
+    EXT_TEMP1_ID = 0xFF  
+    #외부 온도계 MOD BUS ID, 0xFF는 사용하지 않음.      
+    EXT_TEMP2_ID = 0xFF는
+    
+    TEMP_NUM = 1
+    HUMI_NUM = 0
+    CO2_NUM = 0
+    VALVE_NUM = 0
+    MOTOR_NUM = 0
+    LOAD_CELL = 0
+
+[unit_board13]
+    ADDRESS = 0x30D 
+    #MOTOR ID, 0xFF는 사용하지 않음.
+    MOTOR_ID = 0xFF 
+    #ADC channel           
+    TEMP1_ADC = 0
+    #ADC channel               
+    TEMP2_ADC = 1           
+    #상단 0도 ADC값
+    TEMP1_0 = 330           
+    #상단 77도 ADC값
+    TEMP1_77_5 = 3866       
+    #하단 0도 ADC값
+    TEMP2_0 = 330           
+    #하단 77도 ADC값
+    TEMP2_77_5 = 3866       
+    #GPIO 0 상단 솔밸브 릴레이 번호 현재 물 유입
+    SOLVALVE1 = 1                     
+    #GPIO 1 하단 솔밸브 릴레이 번호 현재 냉각수
+    SOLVALVE2 = 2           
+    #최대 모터 속도
+    MAX_RPM = 500           
+    #최소 모터 속도
+    MIN_RPM = 100  
+    #삼상 모터 슬립 속도         
+    SLEEP_SPEED = 130  
+    #외부 온도계 MOD BUS ID, 0xFF는 사용하지 않음.     
+    EXT_TEMP1_ID = 0xFF  
+    #외부 온도계 MOD BUS ID, 0xFF는 사용하지 않음.      
+    EXT_TEMP2_ID = 0xFF는
+    
+    TEMP_NUM = 1
+    HUMI_NUM = 0
+    CO2_NUM = 0
+    VALVE_NUM = 0
+    MOTOR_NUM = 0
+    LOAD_CELL = 0
+
+[unit_board14]
+    ADDRESS = 0x30E 
+    #MOTOR ID, 0xFF는 사용하지 않음.
+    MOTOR_ID = 0xFF 
+    #ADC channel           
+    TEMP1_ADC = 0
+    #ADC channel               
+    TEMP2_ADC = 1           
+    #상단 0도 ADC값
+    TEMP1_0 = 330           
+    #상단 77도 ADC값
+    TEMP1_77_5 = 3866       
+    #하단 0도 ADC값
+    TEMP2_0 = 330           
+    #하단 77도 ADC값
+    TEMP2_77_5 = 3866       
+    #GPIO 0 상단 솔밸브 릴레이 번호 현재 물 유입
+    SOLVALVE1 = 1                     
+    #GPIO 1 하단 솔밸브 릴레이 번호 현재 냉각수
+    SOLVALVE2 = 2           
+    #최대 모터 속도
+    MAX_RPM = 500           
+    #최소 모터 속도
+    MIN_RPM = 100  
+    #삼상 모터 슬립 속도         
+    SLEEP_SPEED = 130  
+    #외부 온도계 MOD BUS ID, 0xFF는 사용하지 않음.     
+    EXT_TEMP1_ID = 0xFF  
+    #외부 온도계 MOD BUS ID, 0xFF는 사용하지 않음.      
+    EXT_TEMP2_ID = 0xFF는
+    
+    TEMP_NUM = 1
+    HUMI_NUM = 0
+    CO2_NUM = 0
+    VALVE_NUM = 0
+    MOTOR_NUM = 0
+    LOAD_CELL = 0
