@@ -250,7 +250,11 @@ class UnitBoardGetStatus(threading.Thread):
                             raise socket.error
                         send_data = self.socket_send_queue.get()
                         if not client._closed:
-                            client.sendall(send_data) 
+                            try:
+                                client.sendall(send_data) 
+                            except socket.error as send_error:
+                                print(f"Send error: {send_error}")
+                                raise socket.error
                         else:
                             pass        
                         ######################################################################################################
@@ -259,7 +263,11 @@ class UnitBoardGetStatus(threading.Thread):
                         else:
                             time.sleep(0.1)
             except socket.error as e:
-                client.close()
+                try:
+                    if not client._closed:
+                        client.close()
+                except:
+                    pass
                 print(f"Transmitter Socket error occurred: {e}")
                 for x in range(self.max_unit_board):                # 유닛보드마다 1초마다 get_status명령어 수행
                     data = {"UNIT_ID" : x, "CMD":"GET_STATUS", "SEND" : False}
@@ -270,7 +278,8 @@ class UnitBoardGetStatus(threading.Thread):
                 print("Transmitter Connection attempt timed out.")
             except Exception as e:
                 time.sleep(0.5)
-                print(e)
+                print(f"Unexpected error in transmitter: {e}")
+                print(traceback.format_exc())
                 
 class TcpClientThread(threading.Thread):
     def __init__(self, tcp_queue, logging, GPIOADDR, socket_event, 
@@ -324,14 +333,20 @@ class TcpClientThread(threading.Thread):
                     # client.settimeout(None)
                     while True:
                         data = bytearray()
-                        while True:
-                            part = client.recv(64)
-                            data += part
-                            if len(part) < 64:
-                                # either 0 or end of data
-                                break
-                        # print(bytes(data[:128]))
-                        print(bytes(data))
+                        try:
+                            while True:
+                                part = client.recv(4096)  # 4KB 버퍼로 최적화
+                                if not part:  # 연결이 끊어진 경우
+                                    raise socket.error("Connection closed by server")
+                                data += part
+                                if len(part) < 4096:  # 버퍼 크기에 맞춰 수정
+                                    # either 0 or end of data
+                                    break
+                            # print(bytes(data[:128]))
+                            print(bytes(data))
+                        except socket.timeout:
+                            print("Data receive timeout, retrying...")
+                            continue
                         
                         try:
                             data = json.loads(bytes(data).decode('UTF-8'))
@@ -368,33 +383,30 @@ class TcpClientThread(threading.Thread):
                                                                 'NOTE': 'Resend'
                                                                 }), 'UTF-8')) 
                             raise socket.error
-                            rint(e)
+                            print(e)
                             print(traceback.format_exc())
             except socket.error as e:
                 # 소켓 통신 에러 처리
                 print("Receiver Connection attempt timed out.")
-                i2cbus = smbus.SMBus(1) 
-                i2cbus.write_byte_data(self.GPIOADDR, 0x12, 0xFF)
-                i2cbus.write_byte_data(self.GPIOADDR, 0x13, 0xFF)
-                time.sleep(0.5)
-                i2cbus.write_byte_data(self.GPIOADDR, 0x12, 0x00)
-                i2cbus.write_byte_data(self.GPIOADDR, 0x13, 0x00)
-                i2cbus.close()   
-                client.close()
+                try:
+                    i2cbus = smbus.SMBus(1) 
+                    i2cbus.write_byte_data(self.GPIOADDR, 0x12, 0xFF)
+                    i2cbus.write_byte_data(self.GPIOADDR, 0x13, 0xFF)
+                    time.sleep(0.5)
+                    i2cbus.write_byte_data(self.GPIOADDR, 0x12, 0x00)
+                    i2cbus.write_byte_data(self.GPIOADDR, 0x13, 0x00)
+                    i2cbus.close()
+                except Exception as i2c_error:
+                    print(f"I2C cleanup error: {i2c_error}")
+                
+                try:
+                    if not client._closed:
+                        client.close()
+                except:
+                    pass
                 # receive_event.set()
                 print(f"Receiver Socket error occurred: {e}")
-                # except socket.timeout:
-                #     print("Connection attempt timed out.")
-                #     i2cbus = smbus.SMBus(1) 
-                #     i2cbus.write_byte_data(self.GPIOADDR, 0x12, 0xFF)
-                #     i2cbus.write_byte_data(self.GPIOADDR, 0x13, 0xFF)
-                #     time.sleep(0.5)
-                #     i2cbus.write_byte_data(self.GPIOADDR, 0x12, 0x00)
-                #     i2cbus.write_byte_data(self.GPIOADDR, 0x13, 0x00)
-                #     i2cbus.close()
-                #     client.close()
             except Exception as e:
                 time.sleep(0.5)
-                print(e)
-                
+                print(f"Unexpected error in receiver: {e}")
                 print(traceback.format_exc())

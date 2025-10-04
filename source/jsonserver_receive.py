@@ -6,7 +6,36 @@ from pprint import pprint
 import json
 import time
 import socket
-HOST = '192.168.0.4'
+
+def receive_complete_json(request, timeout=5.0):
+    """완전한 JSON 메시지를 수신하는 함수"""
+    request.settimeout(timeout)
+    data = bytearray()
+    
+    while True:
+        try:
+            chunk = request.recv(4096)
+            if not chunk:
+                break
+            data.extend(chunk)
+            
+            # JSON 메시지가 완성되었는지 확인
+            try:
+                text = data.decode('utf-8')
+                json.loads(text)  # JSON 유효성 검사
+                return text  # 유효한 JSON이면 반환
+            except json.JSONDecodeError:
+                continue  # 아직 완전하지 않으면 계속 수신
+                
+        except socket.timeout:
+            print("Data receive timeout")
+            break
+    
+    if data:
+        return data.decode('utf-8')
+    return None
+# HOST = '192.168.0.4'
+HOST = '172.30.1.100'
 PORT = 7000
 
 class SingleTCPHandler(socketserver.BaseRequestHandler):
@@ -20,10 +49,14 @@ class SingleTCPHandler(socketserver.BaseRequestHandler):
         # @K2H
         # 기본 동작은 아래 while문이 동작되고 이 문은 주석처리 되어야 함.
         while True:
-            data = self.request.recv(4096)  # clip input at 1Kb
-            text = data.decode('utf-8')
-            print('\n')
-            pprint(json.loads(text))
+            text = receive_complete_json(self.request)
+            if text:
+                try:
+                    print('\n')
+                    pprint(json.loads(text))
+                except json.JSONDecodeError as e:
+                    print(f"JSON decode error: {e}")
+                    print(f"Received data: {text[:100]}...")  # 처음 100바이트만 출력
 
         ############################################################################################
         
@@ -39,12 +72,12 @@ class SingleTCPHandler(socketserver.BaseRequestHandler):
                                                     "DIR"   : 'FW',            #FW = forward, RV = reverse
                                                     "ONOFF" : 'ON'}), 'UTF-8'))
                     try:
-                        data = self.request.recv(1024)  # clip input at 1Kb
-                        text = data.decode('utf-8')
-                        print('\n')
-                        pprint(json.loads(text))
-                    except socket.timeout:
-                        print("Time out")
+                        text = receive_complete_json(self.request, 5.0)
+                        if text:
+                            print('\n')
+                            pprint(json.loads(text))
+                    except Exception as e:
+                        print(f"Error: {e}")
                         
                 elif NUM == 2:
                     self.request.send(bytes(json.dumps({"UNIT_ID" : 0,

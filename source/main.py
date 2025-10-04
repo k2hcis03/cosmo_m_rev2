@@ -36,7 +36,7 @@ class CosmoMain(threading.Thread):
         os.system("sudo ifconfig can0 down")
         time.sleep(0.1)
         # os.system("sudo ip link set can0 up type can bitrate 1000000 dbitrate 8000000 restart-ms 1000 berr-reporting on fd on sample-point .8 dsample-point .8")
-        os.system("sudo ip link set can0 up type can bitrate 1000000 dbitrate 1000000 restart-ms 1000 berr-reporting on fd on")
+        os.system("sudo ip link set can0 up type can bitrate 1000000 dbitrate 4000000 restart-ms 1000 berr-reporting on fd on")
         os.system("sudo ifconfig can0 txqueuelen 65536")
         
         self.client = None
@@ -65,7 +65,7 @@ class CosmoMain(threading.Thread):
             {"can_id": 0x30F, "can_mask": 0x7FF, "extended": False},
         ]
           
-        self.can0 = can.interface.Bus(rx_fifo_size = 8192, channel = 'can0', bustype = 'socketcan', bitrate_switch = False, bitrate = 1000000, data_bitrate = 1000000, fd = True, can_filters=filters)  # socketcan_native
+        self.can0 = can.interface.Bus(rx_fifo_size = 8192, channel = 'can0', interface = 'socketcan', bitrate_switch = True, bitrate = 1000000, data_bitrate = 4000000, fd = True, can_filters=filters)  # socketcan_native
         
         self.i2cbus = smbus.SMBus(1) 
         self.i2cbus.write_byte_data(GPIOADDR, 0x00, 0x00)        # OUTPUT
@@ -203,7 +203,7 @@ def main():
             socket_event.wait()
             socket_event.clear()
             print("Server is Connected")
-            with ProcessPoolExecutor(max_workers=16) as executor:
+            with ProcessPoolExecutor(max_workers=32) as executor:
                 unit_func = unit_board(can_fd_transmitte.queue, socket_send_queue, GPIOADDR, i2c_semaphor)
                 
                 furtures = {executor.submit(unit_func.unit_process, i, shm.name, main_func.unit_np_shm, 

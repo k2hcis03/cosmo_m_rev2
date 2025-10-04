@@ -1,12 +1,19 @@
 # CSV files
 *.csv
-
+*.log
 # Python cache files
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
 
 # Log files
 *.log
