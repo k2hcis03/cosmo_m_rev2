@@ -65,7 +65,7 @@ class CosmoMain(threading.Thread):
             {"can_id": 0x30F, "can_mask": 0x7FF, "extended": False},
         ]
           
-        self.can0 = can.interface.Bus(rx_fifo_size = 8192, channel = 'can0', interface = 'socketcan', bitrate_switch = False, bitrate = 1000000, data_bitrate = 1000000, fd = True, can_filters=filters)  # socketcan_native
+        self.can0 = can.interface.Bus(rx_fifo_size = 8192, channel = 'can0', interface = 'socketcan', bitrate_switch = True, bitrate = 1000000, data_bitrate = 1000000, fd = True, can_filters=filters)  # socketcan_native
         
         self.i2cbus = smbus.SMBus(1) 
         self.i2cbus.write_byte_data(GPIOADDR, 0x00, 0x00)        # OUTPUT

@@ -361,7 +361,7 @@ class UnitBoardGetStatus(threading.Thread):
                 try:
                     data = {"UNIT_ID": x, "CMD": "GET_STATUS", "SEND": False}
                     self.tcp_queue.put(data, timeout=0.5)
-                    time.sleep(0.1)
+                    time.sleep(0.1)     # 시간 조절 해서 모든 유닛보드가 1초안에 GET_STATUS 명령을 보낼 수 있도록 함
                 except queue.Full:
                     self.logging.warning(f'TCP queue full, skipping unit {x}')
                 except Exception as e:

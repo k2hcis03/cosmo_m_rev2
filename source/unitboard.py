@@ -262,7 +262,19 @@ class UnitBoard:
         self.GPIOADDR = GPIOADDR
         self.i2c_semaphor = i2c_semaphor
         # self.pid_update()
-        
+    
+    # data 리스트에 있는 값들에 대해 CRC16 계산 후 data에 추가
+    def crc16(self, data: list):
+        crc = 0xFFFF
+        for d in data:
+            crc ^= d
+            for _ in range(8):
+                if crc & 1:
+                    crc = (crc >> 1) ^ 0xA001
+                else:
+                    crc >>= 1
+        return crc
+
     def unit_process(self, n, shm, arr, semaphor, receive_queue, cmd_queue, logging):
         new_shm = shared_memory.SharedMemory(name=shm)
         shared_memory_u = np.ndarray(arr.shape, dtype=arr.dtype, buffer=new_shm.buf)
@@ -531,9 +543,17 @@ class UnitBoard:
                     elif command['CMD'] == 'GET_STATUS':
                         if int(self.config['ADDRESS'], base=16) != 0xFFF:
                             # 온도계산 전에 GET_ADC를 호출 함. --> 명령어를 통합하여 ADC 값까지 GET_STATUS에서 읽어 옴.
-                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=0x300+id,  
-                                        data=[0xF2, 0x14, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF3])
-                            
+                            data = [0x02]
+                            # INSERT_YOUR_CODE
+
+                            # message의 data는 bytes형이 아니라면, int들의 list로 처리
+                            crc = self.crc16(data)
+                            # CRC16 2byte를 Little Endian으로 배열 뒤에 추가
+                            data.append(crc & 0xFF)
+                            data.append((crc >> 8) & 0xFF)
+                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = True,
+                                        data=bytearray(data))   # message.data가 최대 길이 넘지 않게 조정 (CAN FD 사용시 유동적일 수 있음)
+
                             while not can_fd_receive_queue.empty():
                                 can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
                             
