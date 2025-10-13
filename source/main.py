@@ -44,34 +44,56 @@ class CosmoMain(threading.Thread):
         self.common_config = config_file
         common_config = self.common_config['common']
         MAXUNITBOARD = int(common_config['MAXUNITBOARD'])
-        GPIOADDR = int(common_config['GPIOADDR'], 16)           #16 진수
+        GPIOADDR1 = int(common_config['GPIOADDR1'], 16)           #16 진수
+        GPIOADDR2 = int(common_config['GPIOADDR2'], 16)           #16 진수
         
         filters = [
-            {"can_id": 0x300, "can_mask": 0x7FF, "extended": False},
-            {"can_id": 0x301, "can_mask": 0x7FF, "extended": False},
-            {"can_id": 0x302, "can_mask": 0x7FF, "extended": False},
-            {"can_id": 0x303, "can_mask": 0x7FF, "extended": False},
-            {"can_id": 0x304, "can_mask": 0x7FF, "extended": False},
-            {"can_id": 0x305, "can_mask": 0x7FF, "extended": False},
-            {"can_id": 0x306, "can_mask": 0x7FF, "extended": False},
-            {"can_id": 0x307, "can_mask": 0x7FF, "extended": False},
-            {"can_id": 0x308, "can_mask": 0x7FF, "extended": False},
-            {"can_id": 0x309, "can_mask": 0x7FF, "extended": False},
-            {"can_id": 0x30A, "can_mask": 0x7FF, "extended": False},
-            {"can_id": 0x30B, "can_mask": 0x7FF, "extended": False},
-            {"can_id": 0x30C, "can_mask": 0x7FF, "extended": False},
-            {"can_id": 0x30D, "can_mask": 0x7FF, "extended": False},
-            {"can_id": 0x30E, "can_mask": 0x7FF, "extended": False},
-            {"can_id": 0x30F, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x100, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x101, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x102, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x103, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x104, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x105, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x106, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x107, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x108, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x109, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x10A, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x10B, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x10C, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x10D, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x10E, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x10F, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x110, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x111, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x112, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x113, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x114, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x115, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x116, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x117, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x118, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x119, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x11A, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x11B, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x11C, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x11D, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x11E, "can_mask": 0x7FF, "extended": False},
+            {"can_id": 0x11F, "can_mask": 0x7FF, "extended": False},
         ]
           
         self.can0 = can.interface.Bus(rx_fifo_size = 8192, channel = 'can0', interface = 'socketcan', bitrate_switch = True, bitrate = 1000000, data_bitrate = 4000000, fd = True, can_filters=filters)  # socketcan_native
         
         self.i2cbus = smbus.SMBus(1) 
-        self.i2cbus.write_byte_data(GPIOADDR, 0x00, 0x00)        # OUTPUT
-        self.i2cbus.write_byte_data(GPIOADDR, 0x01, 0x00)        # OUTPUT
-        self.i2cbus.write_byte_data(GPIOADDR, 0x12, 0xFF)
-        self.i2cbus.write_byte_data(GPIOADDR, 0x13, 0xFF)
+        self.i2cbus.write_byte_data(GPIOADDR1, 0x00, 0x00)        # OUTPUT
+        self.i2cbus.write_byte_data(GPIOADDR1, 0x01, 0x00)        # OUTPUT
+        self.i2cbus.write_byte_data(GPIOADDR1, 0x12, 0xFF)
+        self.i2cbus.write_byte_data(GPIOADDR1, 0x13, 0xFF)
+        
+        # self.i2cbus.write_byte_data(GPIOADDR2, 0x00, 0x00)        # OUTPUT
+        # self.i2cbus.write_byte_data(GPIOADDR2, 0x01, 0x00)        # OUTPUT
+        # self.i2cbus.write_byte_data(GPIOADDR2, 0x12, 0xFF)
+        # self.i2cbus.write_byte_data(GPIOADDR2, 0x13, 0xFF)
         self.command_queue = []
         self.i2cbus.close()
         
@@ -161,7 +183,8 @@ def main():
 
     global MAXUNITBOARD, ADDRESS
     MAXUNITBOARD = int(common_config['MAXUNITBOARD'])
-    GPIOADDR = int(common_config['GPIOADDR'], base=16)
+    GPIOADDR1 = int(common_config['GPIOADDR1'], base=16)
+    GPIOADDR2 = int(common_config['GPIOADDR2'], base=16)
     
     # ip = common_config['HOST']
     # port = int(common_config['PORT2'])   
@@ -191,7 +214,7 @@ def main():
     main_func.start()
     
     socket_event = threading.Event()
-    main_func.client = tcp_client(tcp_queue, logging, GPIOADDR, socket_event, i2c_semaphor, MAXUNITBOARD, 
+    main_func.client = tcp_client(tcp_queue, logging, GPIOADDR1, GPIOADDR2, socket_event, i2c_semaphor, MAXUNITBOARD, 
                                   shm.name, main_func.unit_np_shm, socket_send_queue)
     main_func.client.start()                            #tcp client 시작
     unitboard.g_file_path = common_config['JSON_FILE']
@@ -204,7 +227,7 @@ def main():
             socket_event.clear()
             print("Server is Connected")
             with ProcessPoolExecutor(max_workers=32) as executor:
-                unit_func = unit_board(can_fd_transmitte.queue, socket_send_queue, GPIOADDR, i2c_semaphor)
+                unit_func = unit_board(can_fd_transmitte.queue, socket_send_queue, GPIOADDR1, GPIOADDR2, i2c_semaphor)
                 
                 furtures = {executor.submit(unit_func.unit_process, i, shm.name, main_func.unit_np_shm, 
                                             main_func.unit_semaphor, can_fd_receive.receive_queue[i],
@@ -220,7 +243,7 @@ def main():
         shm.close()
         shm.unlink()
         for i in range(MAXUNITBOARD):
-            os.kill(main_func.unit_np_shm[i*shared_mem_size + 29], signal.SIGKILL)
+            os.kill(main_func.unit_np_shm[i*shared_mem_size + 30], signal.SIGKILL)
         print(e)
 if __name__ == "__main__":
     main()

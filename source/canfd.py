@@ -70,6 +70,18 @@ class CanFDReceive(threading.Thread):
             self.logging.error(f'Failed to reinitialize CAN bus: {e}')
             return False
     
+    # data 리스트에 있는 값들에 대해 CRC16 계산 후 data에 추가
+    def crc16(self, data: list):
+        crc = 0xFFFF
+        for d in data:
+            crc ^= d
+            for _ in range(8):
+                if crc & 1:
+                    crc = (crc >> 1) ^ 0xA001
+                else:
+                    crc >>= 1
+        return crc
+    
     def run(self): 
         while True:
             try:
@@ -84,13 +96,17 @@ class CanFDReceive(threading.Thread):
                 self.consecutive_errors = 0
                 
                 # arbitration_id 범위 확인
-                if message.arbitration_id >= 0x300 and message.arbitration_id <= 0x31F:
-                    queue_index = message.arbitration_id - 0x300
+                if message.arbitration_id >= 0x100 and message.arbitration_id <= 0x11F:
+                    queue_index = message.arbitration_id - 0x100
                     
                     # receive_queue 인덱스 범위 확인
                     if queue_index < len(self.receive_queue):
                         try:
-                            # 큐가 가득 찬 경우 처리
+                            # 큐가 가득 찬 경우 처리 calc_crc = self.crc16(message.data[:-2])
+                            crc = self.crc16(message.data[:-2])
+                            if crc != message.data[-1] | (message.data[-2] << 8):
+                                self.logging.warning(f'CRC error for ID 0x{message.arbitration_id:X}')
+                                continue
                             self.receive_queue[queue_index].put(message, block=False)
                         except queue.Full:
                             # 큐가 가득 차면 오래된 메시지 제거 후 새 메시지 추가

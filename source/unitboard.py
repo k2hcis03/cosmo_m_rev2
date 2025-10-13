@@ -256,10 +256,11 @@ class UnitBoardTempControl(threading.Thread):
                     print(e)
 
 class UnitBoard:
-    def __init__(self, transmitte_queue, socket_send_queue, GPIOADDR, i2c_semaphor) -> None:
+    def __init__(self, transmitte_queue, socket_send_queue, GPIOADDR1, GPIOADDR2, i2c_semaphor) -> None:
         self.can_fd_transmitte_queue = transmitte_queue
         self.socket_send_queue = socket_send_queue
-        self.GPIOADDR = GPIOADDR
+        self.GPIOADDR1 = GPIOADDR1
+        self.GPIOADDR2 = GPIOADDR2
         self.i2c_semaphor = i2c_semaphor
         # self.pid_update()
     
@@ -304,17 +305,22 @@ class UnitBoard:
         ######################################################################################################################################################
         # 처음 부팅이 되면 환경 설정을 유닛보드로 전송 ################################
         # SET_CONFIG 명령어 수행
-        message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=0x300+id,  
-                                    data=[0xF2, 0x16, 0x0B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF3])
         try:
-            message.data[4] = int(self.config['MOTOR_ID'], base=16)
+            data = [i for i in range(6)]
+            data[0] = 0x01
+            data[1] = int(self.config['MOTOR_ID'], base=16)
             temp = int(self.config['SLEEP_SPEED'])
-            message.data[6] = temp & 0xff               #big endian
-            message.data[5] = (temp >> 8) & 0xff        #big endian
-            message.data[7] = int(self.config['EXT_TEMP1_ID'], base=16) 
-            message.data[8] = int(self.config['EXT_TEMP2_ID'], base=16) 
-            message.data[9] = 1                         # 1 = GPIO초기화 
-            message.data[10] = 0xFF
+            data[2] = (temp >> 8) & 0xff        #big endian
+            data[3] = temp & 0xff               #big endian
+            data[4] = int(self.config['GPIO_INIT'], base=16) 
+
+            # message의 data는 bytes형이 아니라면, int들의 list로 처리
+            crc = self.crc16(data)
+            # CRC16 2byte를 Little Endian으로 배열 뒤에 추가
+            data.append(crc & 0xFF)
+            data.append((crc >> 8) & 0xFF)
+            message = can.Message(is_extended_id=False, is_fd = True, bitrate_switch = True, arbitration_id=id,  
+                                    data=bytearray(data))
         except ValueError as e:
             print(e)
             
@@ -327,7 +333,7 @@ class UnitBoard:
         if not can_fd_receive_queue.empty():
             logging.info(f'id : {id} unit board is initialized')    
             message = can_fd_receive_queue.get()
-            fw_version = (message.data[4] << 8) | (message.data[5])
+            fw_version = (message.data[1] << 8) | (message.data[2])
             logging.info(f'id : {id} firmware version is : {fw_version * 0.01 : 0.2F}')
         else:
             logging.warning(f'id : {id} unit board is not response')    
@@ -353,9 +359,9 @@ class UnitBoard:
                 self.i2c_semaphor.acquire()
                 i2cbus = smbus.SMBus(1)
                 if int(command['UNIT_ID']) < 14:
-                    i2cbus.write_byte_data(self.GPIOADDR, 0x12, 0xFF & (~(int(command['UNIT_ID']) + 1)))
+                    i2cbus.write_byte_data(self.GPIOADDR1, 0x12, 0xFF & (~(int(command['UNIT_ID']) + 1)))
                 else:
-                    i2cbus.write_byte_data(self.GPIOADDR, 0x13, 0xFF & (~(int(command['UNIT_ID']) + 1)))
+                    i2cbus.write_byte_data(self.GPIOADDR1, 0x13, 0xFF & (~(int(command['UNIT_ID']) + 1)))
                 self.i2c_semaphor.release()
                 if not command:
                     logging.warning(f'id : {id} Timeout waiting for command')
@@ -818,8 +824,10 @@ class UnitBoard:
                                         "SEND" : False}    
                                 command_queue.put(message)
                 self.i2c_semaphor.acquire()
-                i2cbus.write_byte_data(self.GPIOADDR, 0x12, 0xFF)
-                i2cbus.write_byte_data(self.GPIOADDR, 0x13, 0xFF)
+                i2cbus.write_byte_data(self.GPIOADDR1, 0x12, 0xFF)
+                i2cbus.write_byte_data(self.GPIOADDR1, 0x13, 0xFF)
+                # i2cbus.write_byte_data(self.GPIOADDR2, 0x12, 0xFF)
+                # i2cbus.write_byte_data(self.GPIOADDR2, 0x13, 0xFF)
                 i2cbus.close()
                 self.i2c_semaphor.release()
             except Exception as e:
