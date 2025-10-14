@@ -43,8 +43,38 @@ class CanFDReceive(threading.Thread):
             
             # CAN 버스 재생성
             filters = [
-                {"can_id": 0x300 + i, "can_mask": 0x7FF, "extended": False}
-                for i in range(16)
+                {"can_id": 0x100, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x101, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x102, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x103, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x104, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x105, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x106, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x107, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x108, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x109, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x10A, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x10B, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x10C, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x10D, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x10E, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x10F, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x110, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x111, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x112, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x113, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x114, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x115, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x116, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x117, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x118, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x119, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x11A, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x11B, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x11C, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x11D, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x11E, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x11F, "can_mask": 0x7FF, "extended": False},
             ]
             
             self.can0 = can.interface.Bus(
@@ -202,8 +232,38 @@ class CanFDTransmitte(threading.Thread):
             
             # CAN 버스 재생성
             filters = [
-                {"can_id": 0x300 + i, "can_mask": 0x7FF, "extended": False}
-                for i in range(16)
+                {"can_id": 0x100, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x101, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x102, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x103, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x104, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x105, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x106, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x107, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x108, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x109, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x10A, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x10B, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x10C, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x10D, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x10E, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x10F, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x110, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x111, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x112, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x113, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x114, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x115, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x116, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x117, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x118, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x119, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x11A, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x11B, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x11C, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x11D, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x11E, "can_mask": 0x7FF, "extended": False},
+                {"can_id": 0x11F, "can_mask": 0x7FF, "extended": False},
             ]
             
             self.can0 = can.interface.Bus(

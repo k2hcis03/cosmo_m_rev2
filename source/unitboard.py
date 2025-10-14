@@ -306,14 +306,14 @@ class UnitBoard:
         # 처음 부팅이 되면 환경 설정을 유닛보드로 전송 ################################
         # SET_CONFIG 명령어 수행
         try:
-            data = [i for i in range(6)]
+            data = [i for i in range(7)]
             data[0] = 0x01
             data[1] = int(self.config['MOTOR_ID'], base=16)
             temp = int(self.config['SLEEP_SPEED'])
             data[2] = (temp >> 8) & 0xff        #big endian
             data[3] = temp & 0xff               #big endian
             data[4] = int(self.config['GPIO_INIT'], base=16) 
-
+            data[5] = int(self.config['INVERTER'])
             # message의 data는 bytes형이 아니라면, int들의 list로 처리
             crc = self.crc16(data)
             # CRC16 2byte를 Little Endian으로 배열 뒤에 추가
@@ -573,7 +573,8 @@ class UnitBoard:
                             
                             if not can_fd_receive_queue.empty():
                                 message = can_fd_receive_queue.get()
-                                if message.data[1] == 0x14:
+                                
+                                if message.data[0] == 0x02:
                                     if command['SEND']:                      # 로고에 너무 많이 쌓이는 데이터 방지, 
                                         logging.info(f'id : {id} Received message: {message}')
                                     inclination1 = 77.5 / (float(self.config['TEMP1_77_5']) - float(self.config['TEMP1_0']))
@@ -632,7 +633,7 @@ class UnitBoard:
                                     # shared_memory_u[0x12 + id*self.shared_memory_size] = float(f'{(inclination3 * shared_memory_u[2 + id*self.shared_memory_size] - y_offset3) * 100 : 0.2F}')
                                     # shared_memory_u[0x13 + id*self.shared_memory_size] = float(f'{(inclination4 * shared_memory_u[3 + id*self.shared_memory_size] - y_offset4) * 100 : 0.2F}')
                                         
-                                    if command['SEND'] and self.socket_send_queue:
+                                    if command['SEND'] and self.socket_send_queue:  # SEND는 자체 jsonserver_send.py에서 처리하므로 여기서는 처리하지 않음.
                                         self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"success!", 
                                             "TEMP1" : f'{shared_memory_u[0x10 + id*self.shared_memory_size] * 0.01: 0.2F}',
                                             "TEMP2" : f'{shared_memory_u[0x11 + id*self.shared_memory_size] * 0.01: 0.2F}',
