@@ -367,7 +367,7 @@ class UnitBoardGetStatus(threading.Thread):
             for x in range(self.max_unit_board):
                 try:
                     data = {"UNIT_ID": x, "CMD": "GET_STATUS", "SEND": False}
-                    self.tcp_queue.put(data, timeout=0.5)
+                    self.tcp_queue.put(data, block=False)
                     time.sleep(0.1)     # 시간 조절 해서 모든 유닛보드가 1초안에 GET_STATUS 명령을 보낼 수 있도록 함
                 except queue.Full:
                     self.logging.warning(f'TCP queue full, skipping unit {x}')
@@ -455,7 +455,8 @@ class UnitBoardGetStatus(threading.Thread):
                             raise socket.error('Receive event triggered')
                         
                         try:
-                            send_data = self.socket_send_queue.get(timeout=5.0)
+                            #send_data = self.socket_send_queue.get_nowait(timeout=5.0)
+                            send_data = self.socket_send_queue.get_nowait()
                         except queue.Empty:
                             continue
                         
@@ -491,7 +492,7 @@ class UnitBoardGetStatus(threading.Thread):
                     for x in range(self.max_unit_board):
                         try:
                             data = {"UNIT_ID": x, "CMD": "GET_STATUS", "SEND": False}
-                            self.tcp_queue.put(data, timeout=0.5)
+                            self.tcp_queue.put(data, block=False)
                             time.sleep(0.1)
                         except Exception as e:
                             self.logging.error(f'Error sending GET_STATUS during reconnect: {e}')
@@ -695,7 +696,7 @@ class TcpClientThread(threading.Thread):
                         
                         # TCP 큐에 데이터 전달
                         try:
-                            self.tcp_queue.put(data, timeout=1.0)
+                            self.tcp_queue.put(data, block=False)
                         except queue.Full:
                             self.logging.warning('TCP queue full, data may be dropped')
                         

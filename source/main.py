@@ -114,50 +114,50 @@ class CosmoMain(threading.Thread):
             if message['CMD'] == 'STATE':
                 for x in range(MAXUNITBOARD):
                     message['UNIT_ID'] = str(int(message['DATA'][x]['TANK_ID']) - 100)
-                    self.command_queue[x].put(message)
+                    self.command_queue[x].put(message, block=False)
             elif message['CMD'] == 'REF':
                 matching = False
                 for x in range(MAXUNITBOARD):
                     config = self.common_config[f'unit_board{x}']
                     if message['TANK_ID'] == config['TANK_ID']:
                         message['UNIT_ID'] = str(int(message['TANK_ID']) - 100)
-                        self.command_queue[x].put(message)
+                        self.command_queue[x].put(message, block=False)
                         matching = True
                 if not matching:
                     logging.info(f"Wrong Unit board id{message['TANK_ID']}")
             elif message['CMD'] == 'SET_MOTOR':
                 if message['UNIT_ID'] >= 0 and message['UNIT_ID'] <= MAXUNITBOARD:
-                    self.command_queue[message['UNIT_ID']].put(message)
+                    self.command_queue[message['UNIT_ID']].put(message, block=False)
                 else:
                     logging.info(f"Wrong Unit board id{message['UNIT_ID']}")
             elif message['CMD'] == 'SET_GPIO':
                 if message['UNIT_ID'] >= 0 and message['UNIT_ID'] <= MAXUNITBOARD:
-                    self.command_queue[message['UNIT_ID']].put(message)
+                    self.command_queue[message['UNIT_ID']].put(message, block=False)
                 else:
                     logging.info(f"Wrong Unit board id{message['UNIT_ID']}")
             elif message['CMD'] == 'GET_ADC':  
                 if message['UNIT_ID'] >= 0 and message['UNIT_ID'] <= MAXUNITBOARD:
-                    self.command_queue[message['UNIT_ID']].put(message)
+                    self.command_queue[message['UNIT_ID']].put(message, block=False )
                 else:
                     logging.info(f"Wrong Unit board id{message['UNIT_ID']}")
             elif message['CMD'] == 'GET_STATUS':  
                 if message['UNIT_ID'] >= 0 and message['UNIT_ID'] <= MAXUNITBOARD:
-                    self.command_queue[message['UNIT_ID']].put(message)
+                    self.command_queue[message['UNIT_ID']].put(message, block=False)
                 else:
                     logging.info(f"Wrong Unit board id{message['UNIT_ID']}")
             elif message['CMD'] == 'START_TEMP':
                 if message['UNIT_ID'] >= 0 and message['UNIT_ID'] <= MAXUNITBOARD:
-                    self.command_queue[message['UNIT_ID']].put(message)
+                    self.command_queue[message['UNIT_ID']].put(message, block=False)
                 else:
                     logging.info(f"Wrong Unit board id{message['UNIT_ID']}")
             elif message['CMD'] == 'STOP_TEMP':
                 if message['UNIT_ID'] >= 0 and message['UNIT_ID'] <= MAXUNITBOARD:
-                    self.command_queue[message['UNIT_ID']].put(message)
+                    self.command_queue[message['UNIT_ID']].put(message, block=False)
                 else:
                     logging.info(f"Wrong Unit board id{message['UNIT_ID']}")
             elif message['CMD'] == 'TEMP_RPM':
                 if message['UNIT_ID'] >= 0 and message['UNIT_ID'] <= MAXUNITBOARD:
-                    self.command_queue[message['UNIT_ID']].put(message)
+                    self.command_queue[message['UNIT_ID']].put(message, block=False)
                 else:
                     logging.info(f"Wrong Unit board id{message['UNIT_ID']}")
             elif message['CMD'] == 'CTRL':
@@ -166,7 +166,7 @@ class CosmoMain(threading.Thread):
                     config = self.common_config[f'unit_board{x}']
                     if message['TANK_ID'] == config['TANK_ID']:
                         message['UNIT_ID'] = str(int(message['TANK_ID']) - 100)
-                        self.command_queue[x].put(message)
+                        self.command_queue[x].put(message, block=False)
                         matching = True
                 time.sleep(0.05)
                 

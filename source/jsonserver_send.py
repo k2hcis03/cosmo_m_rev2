@@ -46,20 +46,19 @@ class SingleTCPHandler(socketserver.BaseRequestHandler):
                                         "SEND" : True}), 'UTF-8'))
                         
                 elif NUM == 2:
-                    self.request.send(bytes(json.dumps({"UNIT_ID" : 0,
+                    self.request.send(bytes(json.dumps({"UNIT_ID" : 1,
                                                     "IDX" : index,
                                                     "TANK_ID" : "100",
                                                     "CMD":"SET_GPIO",
-                                                    "NUM" : [0, 1, 2, 3, 4], 
-                                                    "VALUE" : [True, False, False, False, False]}), 'UTF-8'))
+                                                    "VALUE" : [True, False, False, False, True, False, False, False]}), 'UTF-8'))   #GPIO 0~7
                 elif NUM == 3:
-                    self.request.send(bytes(json.dumps({"UNIT_ID" : 0,
+                    self.request.send(bytes(json.dumps({"UNIT_ID" : 1,
                                                     "IDX" : index,
                                                     "TANK_ID" : "100",
                                                     "CMD":"GET_ADC",
                                                     "NUM" : [0, 1, 2, 3, 4, 5]}), 'UTF-8'))     
                 elif NUM == 4:
-                    self.request.send(bytes(json.dumps({"UNIT_ID" : 0,
+                    self.request.send(bytes(json.dumps({"UNIT_ID" : 1,
                                                         "IDX" : index,
                                                         "TANK_ID" : "100",
                                                         "CMD":"GET_STATUS",
