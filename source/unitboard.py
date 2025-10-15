@@ -296,7 +296,7 @@ class UnitBoard:
         except Exception as e:
             logging.error(f'id : {id} config.ini file open error')
             print(e)
-        shared_memory_u[0x1D + id * self.shared_memory_size] = os.getpid()       
+        shared_memory_u[id * self.shared_memory_size] = os.getpid()   # id는 shared memory에 첫 번째 데이터  
         # 온도조절 관련 쓰레드 생성 ##################################################
         temp_thread = UnitBoardTempControl(id, event, logging, self.can_fd_transmitte_queue, 
                                                            command_queue, 
@@ -577,56 +577,103 @@ class UnitBoard:
                                 if message.data[0] == 0x02:
                                     if command['SEND']:                      # 로고에 너무 많이 쌓이는 데이터 방지, 
                                         logging.info(f'id : {id} Received message: {message}')
-                                    inclination1 = 77.5 / (float(self.config['TEMP1_77_5']) - float(self.config['TEMP1_0']))
-                                    y_offset1 = inclination1 * float(self.config['TEMP1_0'])
-                                    
-                                    inclination2 = 77.5 / (float(self.config['TEMP2_77_5']) - float(self.config['TEMP2_0']))
-                                    y_offset2 = inclination2 * float(self.config['TEMP2_0'])
-                                    
-                                    inclination3 = 77.5 / (float(self.config['TEMP3_77_5']) - float(self.config['TEMP3_0']))
-                                    y_offset3 = inclination3 * float(self.config['TEMP3_0'])
-                                    
-                                    inclination4 = 77.5 / (float(self.config['TEMP4_77_5']) - float(self.config['TEMP4_0']))
-                                    y_offset4 = inclination4 * float(self.config['TEMP4_0'])
-                                    
-                                    inclination5 = 77.5 / (float(self.config['TEMP5_77_5']) - float(self.config['TEMP5_0']))
-                                    y_offset5 = inclination3 * float(self.config['TEMP5_0'])
-                                    
-                                    inclination6 = 77.5 / (float(self.config['TEMP6_77_5']) - float(self.config['TEMP6_0']))
-                                    y_offset6 = inclination4 * float(self.config['TEMP6_0'])
                                         
                                     unit_semaphor.acquire()
-                                    shared_memory_u[0x06 + id*self.shared_memory_size] = (np.int32)(message.data[7] << 24 | message.data[6] << 16 
-                                                                    | message.data[5] << 8 | message.data[4])
-                                    shared_memory_u[0x07 + id*self.shared_memory_size] = (np.int32)(message.data[9] << 8 | message.data[8])
-                                    shared_memory_u[0x08 + id*self.shared_memory_size] = (np.int32)(message.data[13] << 24 | message.data[12] << 16 
-                                                                    | message.data[11] << 8 | message.data[10])
-                                    shared_memory_u[0x09 + id*self.shared_memory_size] = (np.int32)(message.data[14])
-                                    shared_memory_u[0x0A + id*self.shared_memory_size] = (np.int32)(message.data[15] << 8 | message.data[16]) #RPM
-                                    shared_memory_u[0x0B + id*self.shared_memory_size] = (np.int32)(message.data[17] << 8 | message.data[18]) #load cell
+
+                                    I_mA = (np.float32)(message.data[1] << 8 | message.data[2])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
+                                    T = -10 + (I_mA - 4) * (110) / 16                  
+                                    shared_memory_u[0x0B + id*self.shared_memory_size] = (np.int32)(T * 1000)
+
+                                    I_mA = (np.float32)(message.data[3] << 8 | message.data[4])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
+                                    T = -10 + (I_mA - 4) * (110) / 16                   
+                                    shared_memory_u[0x0C + id*self.shared_memory_size] = (np.int32)(T * 1000)
+
+                                    I_mA = (np.float32)(message.data[5] << 8 | message.data[6])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
+                                    T = -10 + (I_mA - 4) * (110) / 16                   
+                                    shared_memory_u[0x0D + id*self.shared_memory_size] = (np.int32)(T * 1000)
+
+                                    I_mA = (np.float32)(message.data[7] << 8 | message.data[8])*0.001
+                                    T = -10 + (I_mA - 4) * (110) / 16                  
+                                    shared_memory_u[0x0E + id*self.shared_memory_size] = (np.int32)(T * 1000)
+
+                                    I_mA = (np.float32)(message.data[9] << 8 | message.data[10])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
+                                    T = -10 + (I_mA - 4) * (110) / 16                    
+                                    shared_memory_u[0x0F + id*self.shared_memory_size] = (np.int32)(T * 1000)
+
+                                    I_mA = (np.float32)(message.data[11] << 8 | message.data[12])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
+                                    T = -10 + (I_mA - 4) * (110) / 16                             
+                                    shared_memory_u[0x10 + id*self.shared_memory_size] = (np.int32)(T * 1000)
+
+                                    I_mA = (np.float32)(message.data[13] << 8 | message.data[14])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
+                                    T = -10 + (I_mA - 4) * (110) / 16                   
+                                    shared_memory_u[0x11 + id*self.shared_memory_size] = (np.int32)(T * 1000)
+
+                                    I_mA = (np.float32)(message.data[15] << 8 | message.data[16])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
+                                    T = -10 + (I_mA - 4) * (110) / 16                   #-10 ~ 100 C -> 4mA ~ 20mA  유닛보드에서 * 1000이 되므로 여기서 4->4000, 16->16
+                                    shared_memory_u[0x12 + id*self.shared_memory_size] = (np.int32)(T * 1000)
                                     
-                                    shared_memory_u[0x0C + id*self.shared_memory_size] = (np.int32)(message.data[19] << 8 | message.data[20]) #Ext Temp1
-                                    shared_memory_u[0x0D + id*self.shared_memory_size] = (np.int32)(message.data[21] << 8 | message.data[22]) #Ext Humi1
-                                    shared_memory_u[0x0E + id*self.shared_memory_size] = (np.int32)(message.data[23] << 8 | message.data[24]) #Ext Temp2
-                                    shared_memory_u[0x0F + id*self.shared_memory_size] = (np.int32)(message.data[25] << 8 | message.data[26]) #Ext Humi2
+                                    if int(self.config['TANK_TYPE']) == 1 or int(self.config['TANK_TYPE']) == 2: #발효, 제성
+                                        rs485_1 = (np.int32)(message.data[17] << 8 | message.data[18])
+                                        shared_memory_u[0x23 + id*self.shared_memory_size] = rs485_1       #보드에 따라 RPM 또는 다른 센서 값
+                                        rs485_2 = (np.int32)(message.data[19] << 8 | message.data[20])
+                                        shared_memory_u[0x24 + id*self.shared_memory_size] = rs485_2      #보드에 따라 load cell 또는 다른 센서 값
+                                        rs485_3 = (np.int32)(message.data[21] << 8 | message.data[22])
+                                        shared_memory_u[0x28 + id*self.shared_memory_size] = rs485_3      #보드에 따라 ph 또는 다른 센서 값
+                                        rs485_4 = (np.int32)(message.data[23] << 8 | message.data[24])
+                                        shared_memory_u[0x26 + id*self.shared_memory_size] = rs485_4      #보드에 따라 Co2 또는 다른 센서 값
+                                        # rs232_1 = (np.float32)(message.data[25] << 8 | message.data[26]) * 0.001
+                                        # shared_memory_u[0x27 + id*self.shared_memory_size] = (np.int32)(rs232_1)      #보드에 따라 Flower 또는 다른 센서 값
+                                    elif int(self.config['TANK_TYPE']) == 3: #숙성
+                                        rs485_1 = (np.int32)(message.data[17] << 8 | message.data[18])
+                                        shared_memory_u[0x28 + id*self.shared_memory_size] = rs485_1       #보드에 따라 PH 또는 다른 센서 값
+                                    elif int(self.config['TANK_TYPE']) == 4: #제품
+                                        rs485_1 = (np.int32)(message.data[17] << 8 | message.data[18])
+                                        shared_memory_u[0x23 + id*self.shared_memory_size] = rs485_1       #보드에 따라 RPM 또는 다른 센서 값
+                                        rs485_2 = (np.int32)(message.data[19] << 8 | message.data[20])
+                                        shared_memory_u[0x24 + id*self.shared_memory_size] = rs485_2      #보드에 따라 load cell 또는 다른 센서 값
+                                        rs485_3 = (np.int32)(message.data[21] << 8 | message.data[22])
+                                        shared_memory_u[0x28 + id*self.shared_memory_size] = rs485_3      #보드에 따라 ph 또는 다른 센서 값
+                                    elif int(self.config['TANK_TYPE']) == 5: #냉각수
+                                        pass
+                                    elif int(self.config['TANK_TYPE']) == 6: #물
+                                        rs485_1 = (np.int32)(message.data[17] << 8 | message.data[18])
+                                        shared_memory_u[0x23 + id*self.shared_memory_size] = rs485_1       #보드에 따라 RPM 또는 다른 센서 값
+                                        rs485_2 = (np.int32)(message.data[19] << 8 | message.data[20])
+                                        shared_memory_u[0x24 + id*self.shared_memory_size] = rs485_2      #보드에 따라 load cell 또는 다른 센서 값
+                                    elif int(self.config['TANK_TYPE']) == 7: #밑술
+                                        pass
+                                    elif int(self.config['TANK_TYPE']) == 8: #펌프  
+                                        pass
+                                    elif int(self.config['TANK_TYPE']) == 9: #기타
+                                        rs485_1 = (np.int32)(message.data[17] << 8 | message.data[18])
+                                        shared_memory_u[0x27 + id*self.shared_memory_size] = rs485_1       #보드에 따라 유량량 또는 다른 센서 값
+                                        rs485_2 = (np.int32)(message.data[19] << 8 | message.data[20])
+                                        shared_memory_u[0x28 + id*self.shared_memory_size] = rs485_2      #보드에 따라 brix 또는 다른 센서 값
                                     
                                     # ADC 값
-                                    shared_memory_u[0x00 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[27] << 8) | (np.int32)(message.data[28]))
-                                    shared_memory_u[0x01 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[29] << 8) | (np.int32)(message.data[30]))
-                                    shared_memory_u[0x02 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[31] << 8) | (np.int32)(message.data[32]))
-                                    shared_memory_u[0x03 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[33] << 8) | (np.int32)(message.data[34]))
-                                    shared_memory_u[0x04 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[35] << 8) | (np.int32)(message.data[36]))
-                                    shared_memory_u[0x05 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[37] << 8) | (np.int32)(message.data[38]))
+                                    shared_memory_u[0x01 + id*self.shared_memory_size] = (np.int32)((message.data[1] << 8) | message.data[2])
+                                    shared_memory_u[0x02 + id*self.shared_memory_size] = (np.int32)((message.data[3] << 8) | message.data[4])
+                                    shared_memory_u[0x03 + id*self.shared_memory_size] = (np.int32)((message.data[5] << 8) | message.data[6])
+                                    shared_memory_u[0x04 + id*self.shared_memory_size] = (np.int32)((message.data[7] << 8) | message.data[8])
+                                    shared_memory_u[0x05 + id*self.shared_memory_size] = (np.int32)((message.data[9] << 8) | message.data[10])
+                                    shared_memory_u[0x06 + id*self.shared_memory_size] = (np.int32)((message.data[11] << 8) | message.data[12])
+                                    shared_memory_u[0x07 + id*self.shared_memory_size] = (np.int32)((message.data[13] << 8) | message.data[14])
+                                    shared_memory_u[0x08 + id*self.shared_memory_size] = (np.int32)((message.data[15] << 8) | message.data[16])
 
                                     # ADC 값에 온도 계산식을 추가해서 공유메모리에 저장 여기서는 2개만 계산하고 필요하면 추가.
-                                    shared_memory_u[0x10 + id*self.shared_memory_size] = float(f'{(inclination1 * shared_memory_u[0 + id*self.shared_memory_size] - y_offset1) * 100 : 0.2F}')
-                                    shared_memory_u[0x11 + id*self.shared_memory_size] = float(f'{(inclination2 * shared_memory_u[1 + id*self.shared_memory_size] - y_offset2) * 100 : 0.2F}')
+                                    # shared_memory_u[0x10 + id*self.shared_memory_size] = float(f'{(inclination1 * shared_memory_u[0 + id*self.shared_memory_size] - y_offset1) * 100 : 0.2F}')
+                                    # shared_memory_u[0x11 + id*self.shared_memory_size] = float(f'{(inclination2 * shared_memory_u[1 + id*self.shared_memory_size] - y_offset2) * 100 : 0.2F}')
                                     
-                                    shared_memory_u[0x12 + id*self.shared_memory_size] = float(f'{(inclination3 * shared_memory_u[2 + id*self.shared_memory_size] - y_offset3) * 100 : 0.2F}')
-                                    shared_memory_u[0x13 + id*self.shared_memory_size] = float(f'{(inclination4 * shared_memory_u[3 + id*self.shared_memory_size] - y_offset4) * 100 : 0.2F}')
+                                    # shared_memory_u[0x12 + id*self.shared_memory_size] = float(f'{(inclination3 * shared_memory_u[2 + id*self.shared_memory_size] - y_offset3) * 100 : 0.2F}')
+                                    # shared_memory_u[0x13 + id*self.shared_memory_size] = float(f'{(inclination4 * shared_memory_u[3 + id*self.shared_memory_size] - y_offset4) * 100 : 0.2F}')
                                     
-                                    shared_memory_u[0x14 + id*self.shared_memory_size] = float(f'{(inclination5 * shared_memory_u[4 + id*self.shared_memory_size] - y_offset5) * 100 : 0.2F}')
-                                    shared_memory_u[0x15 + id*self.shared_memory_size] = float(f'{(inclination6 * shared_memory_u[5 + id*self.shared_memory_size] - y_offset6) * 100 : 0.2F}')
+                                    # shared_memory_u[0x14 + id*self.shared_memory_size] = float(f'{(inclination5 * shared_memory_u[4 + id*self.shared_memory_size] - y_offset5) * 100 : 0.2F}')
+                                    # shared_memory_u[0x15 + id*self.shared_memory_size] = float(f'{(inclination6 * shared_memory_u[5 + id*self.shared_memory_size] - y_offset6) * 100 : 0.2F}')
+                                    shared_memory_u[0x1A + id*self.shared_memory_size] = (np.int32)(message.data[27])     #GPO 7~0
+                                    shared_memory_u[0x1C + id*self.shared_memory_size] = (np.int32)(message.data[28])    #GPI 7~0
+
+                                    shared_memory_u[0x1E + id*self.shared_memory_size] = (np.int32)(message.data[29])    #inverter 상태
+                                    # shared_memory_u[0x1F + id*self.shared_memory_size] = (np.int32)(message.data[30])    #inverter 상태
                                     unit_semaphor.release()
                                     
                                     # print(f'top temp. is {shared_memory_u[0x10 + id*self.shared_memory_size]*0.01:0.2F} and bottom temp. is {shared_memory_u[0x11 + id*self.shared_memory_size]*0.01}')
@@ -635,18 +682,16 @@ class UnitBoard:
                                         
                                     if command['SEND'] and self.socket_send_queue:  # SEND는 자체 jsonserver_send.py에서 처리하므로 여기서는 처리하지 않음.
                                         self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"success!", 
-                                            "TEMP1" : f'{shared_memory_u[0x10 + id*self.shared_memory_size] * 0.01: 0.2F}',
-                                            "TEMP2" : f'{shared_memory_u[0x11 + id*self.shared_memory_size] * 0.01: 0.2F}',
-                                            "GPO4~GPO1": f'{shared_memory_u[0x06 + id*self.shared_memory_size]}',
-                                            "GPO8~GPO5": f'{shared_memory_u[0x07 + id*self.shared_memory_size]}',
-                                            "GPI4~GPI1": f'{shared_memory_u[0x08 + id*self.shared_memory_size]}',
-                                            "GPI8~GPI5": f'{shared_memory_u[0x09 + id*self.shared_memory_size]}',
-                                            "RPM": f'{shared_memory_u[0x0A + id*self.shared_memory_size]}',
-                                            "LOAD CELL": f'{shared_memory_u[0x0B + id*self.shared_memory_size] * 0.01 : 0.2F}kg',
-                                            "EXTTEMP1": f'{shared_memory_u[0x0C + id*self.shared_memory_size] * 0.01 : 0.2F}C',
-                                            "EXTHUMI1": f'{shared_memory_u[0x0D + id*self.shared_memory_size] * 0.01 : 0.2F}%',
-                                            "EXTTEMP2": f'{shared_memory_u[0x0E + id*self.shared_memory_size] * 0.01 : 0.2F}C',
-                                            "EXTHUMI2": f'{shared_memory_u[0x0F + id*self.shared_memory_size] * 0.01 : 0.2F}%',
+                                            "TEMP1" : f'{shared_memory_u[0x0B + id*self.shared_memory_size] * 0.001: 0.2F}',
+                                            "TEMP2" : f'{shared_memory_u[0x0C + id*self.shared_memory_size] * 0.001: 0.2F}',
+                                            "GPO7~GPO0": f'{shared_memory_u[0x1A + id*self.shared_memory_size]}',
+                                            "GPI7~GPI0": f'{shared_memory_u[0x1C + id*self.shared_memory_size]}',
+                                            "RPM": f'{shared_memory_u[0x23 + id*self.shared_memory_size]}',
+                                            "LOAD CELL": f'{shared_memory_u[0x24 + id*self.shared_memory_size] * 0.001 : 0.2F}kg',
+                                            "SENSOR1": f'{shared_memory_u[0x25 + id*self.shared_memory_size] * 0.001 : 0.2F}',
+                                            "SENSOR2": f'{shared_memory_u[0x26 + id*self.shared_memory_size] * 0.001 : 0.2F}%',
+                                            "SENSOR3": f'{shared_memory_u[0x27 + id*self.shared_memory_size] * 0.001 : 0.2F}%',
+                                            "SENSOR4": f'{shared_memory_u[0x28 + id*self.shared_memory_size] * 0.001 : 0.2F}%'
                                             }), 'UTF-8'))
                                 else:
                                     logging.warning(f'id : {id} {command["CMD"]} unit board is wrong response')

@@ -40,7 +40,7 @@ class UnitBoardGetStatus(threading.Thread):
                 logging.error('Config file not found, using default values')
                 # 기본값 설정
                 self.config_file['common'] = {
-                    'SHARED_MEMORY_SIZE': '100',
+                    'SHARED_MEMORY_SIZE': '50',
                     'FERMEN_TANK': '0',
                     'BLEND_TANK': '0',
                     'PROD_TANK': '0',
@@ -49,7 +49,7 @@ class UnitBoardGetStatus(threading.Thread):
         except Exception as e:
             logging.error(f'Failed to read config file: {e}, using default values')
             self.config_file['common'] = {
-                'SHARED_MEMORY_SIZE': '100',
+                'SHARED_MEMORY_SIZE': '50',
                 'FERMEN_TANK': '0',
                 'BLEND_TANK': '0',
                 'PROD_TANK': '0',
@@ -84,11 +84,18 @@ class UnitBoardGetStatus(threading.Thread):
                 "STATE":[],
                 # "CODE":{"CODE":1000,"MSG":"OK"}
             }
-            # temp_index = [16, 17, 12, 14]         #온도 값이 저장되는 shared_memory 위치
-            temp_index = [17, 16, 12, 14]           #온도 값이 저장되는 shared_memory 위치 
-            humi_index = [13, 15]                   #습도 값이 저장되는 shared_memory 위치
-            co2_index = [13, 15]                    #Co2 값이 저장되는 shared_memory 위치
-            vavle_index = [1, 0]
+            temp_index = [0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12]           #온도 값이 저장되는 shared_memory 위치 
+            humi_index = [0x13, 0x15]                       #습도 값이 저장되는 shared_memory 위치
+            co2_index = [0x26, 0x26]                        #Co2 값이 저장되는 shared_memory 위치
+            ph_index = [0x28, 0x28]                         #PH 값이 저장되는 shared_memory 위치
+            brix_index = [0x25, 0x25]                       #Brix 값이 저장되는 shared_memory 위치
+            flow_index = [0x27, 0x27]                       #Flow 값이 저장되는 shared_memory 위치
+            loadcell_index = [0x24, 0x24]                   #Load Cell 값이 저장되는 shared_memory 위치
+            gpo_index = [0x1A, 0x1A]                        #gpo 값이 저장되는 shared_memory 위치
+            gpi_index = [0x1c, 0x1c]                        #gpi 값이 저장되는 shared_memory 위치
+            inverter_index = [0x1E, 0x1E]                   #inverter 값이 저장되는 shared_memory 위치
+            motor_index = [0x23, 0x23]                       #motor 값이 저장되는 shared_memory 위치
+            # vavle_index = [1, 0]
             self.order += 1
                                 
             for i in range(int(common_config['FERMEN_TANK'])):
@@ -104,33 +111,33 @@ class UnitBoardGetStatus(threading.Thread):
                     for x in range(int(unit_config.get('TEMP_NUM', 0))):
                         mem_idx = base_index + temp_index[x]
                         if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f'{100+i}',"SENSOR_ID":f'{100+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.01:0.2F}"})
+                            self.send_data['VALUES'].append({"TANK_ID":f'{100+i}',"SENSOR_ID":f'{100+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     
                     for x in range(int(unit_config.get('HUMI_NUM', 0))):
                         mem_idx = base_index + humi_index[x]
                         if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f'{100+i}',"SENSOR_ID":f'{200+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.01:0.2F}"})
+                            self.send_data['VALUES'].append({"TANK_ID":f'{100+i}',"SENSOR_ID":f'{200+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     
                     for x in range(int(unit_config.get('CO2_NUM', 0))):
                         mem_idx = base_index + co2_index[x]
                         if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f'{100+i}',"SENSOR_ID":f'{300+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.01:0.2F}"})
+                            self.send_data['VALUES'].append({"TANK_ID":f'{100+i}',"SENSOR_ID":f'{300+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     
                     for x in range(int(unit_config.get('LOAD_CELL', 0))):
-                        mem_idx = base_index + 11
+                        mem_idx = base_index + loadcell_index[x]        #11
                         if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f'{100+i}',"SENSOR_ID":f'{400+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.01:0.2F}"})
+                            self.send_data['VALUES'].append({"TANK_ID":f'{100+i}',"SENSOR_ID":f'{400+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     
                     for x in range(int(unit_config.get('VALVE_NUM', 0))):
-                        mem_idx = base_index + 6
+                        mem_idx = base_index + gpo_index[x]
                         if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f'{100+i}',"SENSOR_ID":f'{500+x}',"VALUE":
-                                f"{(self.shared_memory[mem_idx] & (0x000000FF << vavle_index[x]*8)) >> vavle_index[x]*8}"})
+                            self.send_data['VALUES'].append({"TANK_ID":f'{100+i}',"SENSOR_ID":f'{500+x}',"VALUE":                   # 상단, 하단 솔밸브
+                                f"{(self.shared_memory[mem_idx] >> x) & 0x00000001}"})
                     
                     for x in range(int(unit_config.get('MOTOR_NUM', 0))):
-                        mem_idx = base_index + 10
+                        mem_idx = base_index + + motor_index[x]
                         if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f'{100+i}',"SENSOR_ID":f'{600+x}',"VALUE":f"{self.shared_memory[mem_idx]}"})
+                            self.send_data['VALUES'].append({"TANK_ID":f'{100+i}',"SENSOR_ID":f'{600+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     
                     # State 정보 추가
                     status_idx = base_index + 0x18
@@ -168,17 +175,17 @@ class UnitBoardGetStatus(threading.Thread):
                     for x in range(int(unit_config.get('TEMP_NUM', 0))):
                         mem_idx = base_index + temp_index[x]
                         if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f'{200+i}',"SENSOR_ID":f'{100+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.01:0.2F}"})
+                            self.send_data['VALUES'].append({"TANK_ID":f'{200+i}',"SENSOR_ID":f'{100+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     
                     for x in range(int(unit_config.get('HUMI_NUM', 0))):
                         mem_idx = base_index + humi_index[x]
                         if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f'{200+i}',"SENSOR_ID":f'{200+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.01:0.2F}"})
+                            self.send_data['VALUES'].append({"TANK_ID":f'{200+i}',"SENSOR_ID":f'{200+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     
                     for x in range(int(unit_config.get('CO2_NUM', 0))):
                         mem_idx = base_index + co2_index[x]
                         if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f'{200+i}',"SENSOR_ID":f'{300+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.01:0.2F}"})
+                            self.send_data['VALUES'].append({"TANK_ID":f'{200+i}',"SENSOR_ID":f'{300+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     
                     for x in range(int(unit_config.get('LOAD_CELL', 0))):
                         mem_idx = base_index + 11
@@ -231,22 +238,22 @@ class UnitBoardGetStatus(threading.Thread):
                     for x in range(int(unit_config.get('TEMP_NUM', 0))):
                         mem_idx = base_index + temp_index[x]
                         if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f'{300+i}',"SENSOR_ID":f'{100+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.01:0.2F}"})
+                            self.send_data['VALUES'].append({"TANK_ID":f'{300+i}',"SENSOR_ID":f'{100+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     
                     for x in range(int(unit_config.get('HUMI_NUM', 0))):
                         mem_idx = base_index + humi_index[x]
                         if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f'{300+i}',"SENSOR_ID":f'{200+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.01:0.2F}"})
+                            self.send_data['VALUES'].append({"TANK_ID":f'{300+i}',"SENSOR_ID":f'{200+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     
                     for x in range(int(unit_config.get('CO2_NUM', 0))):
                         mem_idx = base_index + co2_index[x]
                         if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f'{300+i}',"SENSOR_ID":f'{300+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.01:0.2F}"})
+                            self.send_data['VALUES'].append({"TANK_ID":f'{300+i}',"SENSOR_ID":f'{300+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     
                     for x in range(int(unit_config.get('LOAD_CELL', 0))):
                         mem_idx = base_index + 11
                         if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f'{300+i}',"SENSOR_ID":f'{400+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.01:0.2F}"})
+                            self.send_data['VALUES'].append({"TANK_ID":f'{300+i}',"SENSOR_ID":f'{400+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     
                     for x in range(int(unit_config.get('VALVE_NUM', 0))):
                         mem_idx = base_index + 6
@@ -294,22 +301,22 @@ class UnitBoardGetStatus(threading.Thread):
                     for x in range(int(unit_config.get('TEMP_NUM', 0))):
                         mem_idx = base_index + temp_index[x]
                         if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f'{400+i}',"SENSOR_ID":f'{100+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.01:0.2F}"})
+                            self.send_data['VALUES'].append({"TANK_ID":f'{400+i}',"SENSOR_ID":f'{100+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     
                     for x in range(int(unit_config.get('HUMI_NUM', 0))):
                         mem_idx = base_index + humi_index[x]
                         if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f'{400+i}',"SENSOR_ID":f'{200+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.01:0.2F}"})
+                            self.send_data['VALUES'].append({"TANK_ID":f'{400+i}',"SENSOR_ID":f'{200+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     
                     for x in range(int(unit_config.get('CO2_NUM', 0))):
                         mem_idx = base_index + co2_index[x]
                         if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f'{400+i}',"SENSOR_ID":f'{300+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.01:0.2F}"})
+                            self.send_data['VALUES'].append({"TANK_ID":f'{400+i}',"SENSOR_ID":f'{300+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     
                     for x in range(int(unit_config.get('LOAD_CELL', 0))):
                         mem_idx = base_index + 11
                         if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f'{400+i}',"SENSOR_ID":f'{400+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.01:0.2F}"})
+                            self.send_data['VALUES'].append({"TANK_ID":f'{400+i}',"SENSOR_ID":f'{400+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     
                     for x in range(int(unit_config.get('VALVE_NUM', 0))):
                         mem_idx = base_index + 6
