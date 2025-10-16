@@ -35,7 +35,7 @@ class SingleTCPHandler(socketserver.BaseRequestHandler):
                 index += 1
                 # print(NUM)
                 if NUM == 1:
-                    self.request.send(bytes(json.dumps({"UNIT_ID" : 0, 
+                    self.request.send(bytes(json.dumps({"UNIT_ID" : 1, 
                                         "IDX" : index,
                                         "TANK_ID" : "100",                 
                                         "CMD":"TEMP_RPM",
@@ -50,12 +50,14 @@ class SingleTCPHandler(socketserver.BaseRequestHandler):
                                                     "IDX" : index,
                                                     "TANK_ID" : "100",
                                                     "CMD":"SET_GPIO",
+                                                    "SEND" : True,
                                                     "VALUE" : [True, False, False, False, True, False, False, False]}), 'UTF-8'))   #GPIO 0~7
                 elif NUM == 3:
                     self.request.send(bytes(json.dumps({"UNIT_ID" : 1,
                                                     "IDX" : index,
                                                     "TANK_ID" : "100",
                                                     "CMD":"GET_ADC",
+                                                    "SEND" : True,
                                                     "NUM" : [0, 1, 2, 3, 4, 5]}), 'UTF-8'))     
                 elif NUM == 4:
                     self.request.send(bytes(json.dumps({"UNIT_ID" : 1,
@@ -69,6 +71,7 @@ class SingleTCPHandler(socketserver.BaseRequestHandler):
                                                     "IDX" : index,
                                                     "TANK_ID" : "100",
                                                     "CMD":"START_TEMP",  
+                                                    "SEND" : True,
                                                     "MODE" : 'BOTH',
                                                     "TIMEOUT" : 28800}), 'UTF-8'))   #BOTH --> VALUE & motor, MOTOR --> motor, 
                                                                                     #VALVE --> valve, time --> sec
@@ -77,10 +80,11 @@ class SingleTCPHandler(socketserver.BaseRequestHandler):
                                                     "IDX" : index,
                                                     "TANK_ID" : "100",
                                                     "CMD":"STOP_TEMP",  
+                                                    "SEND" : True,
                                                     "TIMEOUT" : 28800}), 'UTF-8'))   #BOTH --> VALUE & motor, MOTOR --> motor, 
                                                                                     #VALVE --> valve, time --> sec
                 elif NUM == 7:
-                    self.request.send(bytes(json.dumps({"UNIT_ID" : 0,
+                    self.request.send(bytes(json.dumps({"UNIT_ID" : 1,
                                                     "IDX" : index,
                                                     "TANK_ID" : "100",
                                                     "CMD":"TEMP_RPM",
@@ -95,6 +99,7 @@ class SingleTCPHandler(socketserver.BaseRequestHandler):
                                                     "IDX" : index,
                                                     "CMD":"SET_GPIO",
                                                     "NUM" : [0, 1, 2, 3, 4], 
+                                                    "SEND" : True,
                                                     "VALUE" : [False, False, False, False, False]}), 'UTF-8'))
                 else:
                     print("잘못된 선택입니다.")

@@ -333,8 +333,11 @@ class UnitBoard:
         if not can_fd_receive_queue.empty():
             logging.info(f'id : {id} unit board is initialized')    
             message = can_fd_receive_queue.get()
-            fw_version = (message.data[1] << 8) | (message.data[2])
-            logging.info(f'id : {id} firmware version is : {fw_version * 0.01 : 0.2F}')
+            if message.data[3] == 1:            # 1 : 정상, 0 : 오류
+                fw_version = (message.data[1] << 8) | (message.data[2])
+                logging.info(f'id : {id} firmware version is : {fw_version * 0.01 : 0.2F}')
+            else:
+                logging.warning(f'id : {id} unit board is wrong response')
         else:
             logging.warning(f'id : {id} unit board is not response')    
         ######################################################################################################################################################                        
@@ -432,48 +435,7 @@ class UnitBoard:
                             
                             if command['DATA'][id]['STATUS'] == 'Run' and int(command['DATA'][id]['STAGE']) != old_stage:
                                 shared_memory_u[0x17 + id*self.shared_memory_size] = 0
-                            self.old_stage = int(command['DATA'][id]['STAGE'])
-                    elif command['CMD'] == 'SET_MOTOR':
-                        if int(self.config['ADDRESS'], 16) != 0xFFF:
-                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=0x300+id,  
-                                        data=[0xF2, 0x11, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF3])
-                            temp = int(command['SPEED'])
-                            message.data[5] = temp & 0xff               # big endian
-                            message.data[4] = (temp >> 8) & 0xff        # big endian
-                            if command['DIR'] == 'FW':
-                                message.data[6] = 1
-                            else:
-                                message.data[6] = 0
-                            if command['ONOFF'] == 'ON':
-                                message.data[7] = 1
-                            else:
-                                message.data[7] = 0
-                                
-                            while not can_fd_receive_queue.empty():
-                                can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
-                            
-                            self.can_fd_transmitte_queue.put(message) 
-                            # time.sleep(0.40)
-                            wait = 0
-                            while can_fd_receive_queue.empty():
-                                time.sleep(0.01)
-                                wait += 1
-                                if wait > 120:
-                                    break
-                            if not can_fd_receive_queue.empty():
-                                message = can_fd_receive_queue.get()
-                                if message.data[1] == 0x11:
-                                    logging.info(f'id : {id} Received message: {message}')
-                                    if self.socket_send_queue:
-                                        if message.data[4] == 1:
-                                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":f"success!"}), 'UTF-8'), block=False)
-                                        else:
-                                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'), block=False)
-                                else:
-                                    logging.warning(f'id : {id} {command["CMD"]} unit board is wrong response')  
-                            else:
-                                logging.warning(f'id : {id} {command["CMD"]} unit board is not response')   
-                            # logging.info(f'id : {id} UnitBoard execute {command["CMD"]}')            
+                            self.old_stage = int(command['DATA'][id]['STAGE'])   
                     elif command['CMD'] == 'GET_ADC':
                         if int(self.config['ADDRESS'], base=16) != 0xFFF:
                             data = [0x03]
@@ -508,7 +470,7 @@ class UnitBoard:
                                     shared_memory_u[0x07 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[13] << 8) | (np.int32)(message.data[14]))
                                     shared_memory_u[0x08 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[15] << 8) | (np.int32)(message.data[16]))
                                     unit_semaphor.release()
-                                    if self.socket_send_queue:
+                                    if command['SEND'] and self.socket_send_queue:
                                         self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"success!", 
                                                     "ADC1": f'{shared_memory_u[0x01 + id*self.shared_memory_size] * 0.001}',
                                                     "ADC2": f'{shared_memory_u[0x02 + id*self.shared_memory_size] * 0.001}',
@@ -549,10 +511,13 @@ class UnitBoard:
                                     break
                             if not can_fd_receive_queue.empty():
                                 message = can_fd_receive_queue.get()
-                                if message.data[1] == 0x13:
+                                if message.data[0] == 0x05:
                                     logging.info(f'id : {id} Received message: {message}')
-                                    if self.socket_send_queue:
-                                        self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"success!"}), 'UTF-8'), block=False)
+                                    if command['SEND'] and self.socket_send_queue:
+                                        if message.data[1] == 1:
+                                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"success!"}), 'UTF-8'), block=False)
+                                        else:
+                                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'), block=False)
                                 else:
                                     logging.warning(f'id : {id} {command["CMD"]} unit board is wrong response') 
                             else:
@@ -711,37 +676,38 @@ class UnitBoard:
                             event.set()
                             temp_thread.temp_control_start = True
                             
-                            if self.socket_send_queue:
+                            if command['SEND'] and self.socket_send_queue:
                                 self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"success!"}), 'UTF-8'), block=False)
                             # logging.info(f'id : {id} UnitBoard execute {command["CMD"]}')
                     elif command['CMD'] == 'STOP_TEMP':
                         if int(self.config['ADDRESS'], base=16) != 0xFFF:
                             temp_thread.temp_control_start = False
                             
-                            if self.socket_send_queue:
+                            if command['SEND'] and self.socket_send_queue:
                                 self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"success!"}), 'UTF-8'), block=False)
                             # logging.info(f'id : {id} UnitBoard execute {command["CMD"]}')
                     elif command['CMD'] == 'TEMP_RPM':
                         if int(self.config['ADDRESS'], base=16) != 0xFFF:
-                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=0x300+id,  
-                                        data=[0xF2, 0x17, 0x0B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF3])
-
+                            data = [0x07]
                             temp = int(command['SPEED'])
-                            message.data[5] = temp & 0xff               # big endian
-                            message.data[4] = (temp >> 8) & 0xff        # big endian
-                            if command['DIR'] == 'FW':
-                                message.data[6] = 1
-                            else:
-                                message.data[6] = 0
-                            if command['ONOFF'] == 'ON':
-                                message.data[7] = 1
-                            else:
-                                message.data[7] = 0
+                            data.append((temp >> 8) & 0xff)        # big endian
+                            data.append(temp & 0xff)               # big endian
                             
-                            temp = int(command['TIME'])
-                            message.data[9] = temp & 0xff               # big endian
-                            message.data[8] = (temp >> 8) & 0xff        # big endian
+                            if command['DIR'] == 'FW':
+                                data.append(1)
+                            else:
+                                data.append(0)
+                            if command['ONOFF'] == 'ON':
+                                data.append(1)
+                            else:
+                                data.append(0)
                                 
+                            crc = self.crc16(data)
+                            data.append(crc & 0xFF)
+                            data.append((crc >> 8) & 0xFF)
+                            message = can.Message(is_extended_id=False, is_fd = True, bitrate_switch = True, arbitration_id=id,  
+                                        data=bytearray(data))
+                            
                             while not can_fd_receive_queue.empty():
                                 can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
                             
@@ -754,10 +720,10 @@ class UnitBoard:
                                     break                           
                             if not can_fd_receive_queue.empty():
                                 message = can_fd_receive_queue.get()
-                                if message.data[1] == 0x17:
+                                if message.data[0] == 0x07:
                                     logging.info(f'id : {id} Received message: {message}')
                                     if command['SEND'] and self.socket_send_queue:
-                                        if message.data[4] == 1:
+                                        if message.data[1] == 1:
                                             self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":f"success!"}), 'UTF-8'), block=False)
                                         else:
                                             self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'), block=False)
@@ -768,12 +734,15 @@ class UnitBoard:
                             # logging.info(f'id : {id} UnitBoard execute {command["CMD"]}')
                     elif command['CMD'] == 'TEMP_VALVE':
                         if int(self.config['ADDRESS'], 16) != 0xFFF:
-                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=0x300+id,  
-                                        data=[0xF2, 0x18, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF3])
-
-                            message.data[4] = int(command['CHANNEL'])             
-                            message.data[5] = command['VALUE']          # 유닛보드에서 설정된 포트 값
-                                
+                            data = [0x08]
+                            data.append(int(command['CHANNEL']))
+                            data.append(int(command['VALUE']))
+                            crc = self.crc16(data)
+                            data.append(crc & 0xFF)
+                            data.append((crc >> 8) & 0xFF)
+                            message = can.Message(is_extended_id=False, is_fd = True, bitrate_switch = True, arbitration_id=id,  
+                                        data=bytearray(data))
+                            
                             while not can_fd_receive_queue.empty():
                                 can_fd_receive_queue.get()              # as docs say: Remove and return an item from the queue.
                             
@@ -786,12 +755,12 @@ class UnitBoard:
                                     break
                             if not can_fd_receive_queue.empty():
                                 message = can_fd_receive_queue.get()
-                                if message.data[1] == 0x18:
+                                if message.data[0] == 0x08:
                                     logging.info(f'id : {id} Received message: {message}')
                                     # temp_thread.set_cold_valve(message.data[5])   # 지속적인 재전송을 원하면 주석 해제. 
                                     
-                                    if self.socket_send_queue:
-                                        if message.data[4] == 1:
+                                    if command['SEND'] and self.socket_send_queue:
+                                        if message.data[1] == 1:
                                             self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":f"success!"}), 'UTF-8'), block=False)
                                         else:
                                             self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'), block=False)
@@ -802,15 +771,19 @@ class UnitBoard:
                             # logging.info(f'id : {id} UnitBoard execute {command["CMD"]}')   
                     elif command['CMD'] == 'WEIGHT_VALVE':
                         if int(self.config['ADDRESS'], base=16) != 0xFFF:
-                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=0x300+id,  
-                                        data=[0xF2, 0x19, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF3])
+                            data = [0x09]
+                            data.append(int(command['CHANNEL']))
+                            data.append(int(command['VALUE']))
+                            temp = command['WEIGHT']               # int(float(command['CTRL'][0]['PARAM1']) * 10) 
+                            data.append((temp >> 8) & 0xff)        # big endian
+                            data.append(temp & 0xff)               # big endian
                             
-                            temp = command['WEIGHT']                    # int(float(command['CTRL'][0]['PARAM1']) * 10) 
-                            message.data[4] = int(command['CHANNEL']) 
-                            message.data[5] = command['VALUE']
-                            message.data[7] = temp & 0xff               # big endian
-                            message.data[6] = (temp >> 8) & 0xff        # big endian
-                            message.data[8] = command['ONTIME']
+                            data.append(int(command['ONTIME']))
+                            crc = self.crc16(data)
+                            data.append(crc & 0xFF)
+                            data.append((crc >> 8) & 0xFF)
+                            message = can.Message(is_extended_id=False, is_fd = True, bitrate_switch = True, arbitration_id=id,  
+                                        data=bytearray(data))
                                 
                             while not can_fd_receive_queue.empty():
                                 can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
@@ -825,8 +798,12 @@ class UnitBoard:
                                     break
                             if not can_fd_receive_queue.empty():
                                 message = can_fd_receive_queue.get()
-                                if message.data[1] == 0x19:
+                                if message.data[0] == 0x09:
                                     logging.info(f'id : {id} Received message: {message}')
+                                    if message.data[1] == 1:
+                                        self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":f"success!"}), 'UTF-8'), block=False)
+                                    else:
+                                        self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'), block=False)
                                 else:
                                     logging.warning(f'id : {id} {command["CMD"]} unit board is wrong response')  
                             else:
@@ -873,7 +850,7 @@ class UnitBoard:
                                         "DIR"   : 'FW',            #FW = forward, RV = reverse
                                         "ONOFF" : 'ON', 
                                         "TIME" : run_time,
-                                        "SEND" : False}    
+                                        "SEND" : True}    
                                 command_queue.put(message, block=False)
                 self.i2c_semaphor.acquire()
                 i2cbus.write_byte_data(self.GPIOADDR1, 0x12, 0xFF)
