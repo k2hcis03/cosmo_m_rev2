@@ -306,14 +306,21 @@ class UnitBoard:
         # 처음 부팅이 되면 환경 설정을 유닛보드로 전송 ################################
         # SET_CONFIG 명령어 수행
         try:
-            data = [i for i in range(7)]
-            data[0] = 0x01
-            data[1] = int(self.config['MOTOR_ID'], base=16)
+            data = []
+            data.append(0x01)
+            data.append(int(self.config['MOTOR_ID'], base=16))
             temp = int(self.config['SLEEP_SPEED'])
-            data[2] = (temp >> 8) & 0xff        #big endian
-            data[3] = temp & 0xff               #big endian
-            data[4] = int(self.config['GPIO_INIT'], base=16) 
-            data[5] = int(self.config['INVERTER'])
+            data.append((temp >> 8) & 0xff)        #big endian
+            data.append(temp & 0xff)               #big endian
+            data.append(int(self.config['GPIO_INIT'], base=16)) 
+            data.append(int(self.config['INVERTER_CLASS']))
+            data.append(int(self.config['INVERTER_FREQUENCY']))
+            temp = int(self.config['INVERTER_MAX_RPM'])
+            data.append((temp >> 8) & 0xff)        #big endian
+            data.append(temp & 0xff)               #big endian
+            temp = int(self.config['INVERTER_MAX_HZ'])
+            data.append((temp >> 8) & 0xff)        #big endian
+            data.append(temp & 0xff)               #big endian
             # message의 data는 bytes형이 아니라면, int들의 list로 처리
             crc = self.crc16(data)
             # CRC16 2byte를 Little Endian으로 배열 뒤에 추가
