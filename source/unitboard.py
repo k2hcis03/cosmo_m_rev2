@@ -63,7 +63,7 @@ class UnitBoardTempControl(threading.Thread):
     
         self.file_write = False             # CSV 파일을 새로 만들지 결정
         self.file_write_state = None        # CSV 파일 저장 조건 상태
-        self.file_index = 0
+        self.file_index = 0                 # CSV 파일 만들때 파일 번호
         self.timer_control_valve = False    # 타이머로 제어 할 때, 시간 마다 한 번만 제어 하기위한 변수
         self.motor_rpm = 0                  # 모터 현재 속도
         self.dir_name = None                # data 기록 디렉토리 생성 initial 상태에서 업데이트 됨

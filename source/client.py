@@ -94,7 +94,7 @@ class UnitBoardGetStatus(threading.Thread):
             gpo_index = [0x1A, 0x1A]                        #gpo 값이 저장되는 shared_memory 위치
             gpi_index = [0x1c, 0x1c]                        #gpi 값이 저장되는 shared_memory 위치
             inverter_index = [0x1E, 0x1E]                   #inverter 값이 저장되는 shared_memory 위치
-            motor_index = [0x23, 0x23]                       #motor 값이 저장되는 shared_memory 위치
+            motor_index = [0x23, 0x23]                      #motor 값이 저장되는 shared_memory 위치
             # vavle_index = [1, 0]
             self.order += 1
                                 
@@ -135,7 +135,7 @@ class UnitBoardGetStatus(threading.Thread):
                                 f"{(self.shared_memory[mem_idx] >> x) & 0x00000001}"})
                     
                     for x in range(int(unit_config.get('MOTOR_NUM', 0))):
-                        mem_idx = base_index + + motor_index[x]
+                        mem_idx = base_index + motor_index[x]
                         if mem_idx < len(self.shared_memory):
                             self.send_data['VALUES'].append({"TANK_ID":f'{100+i}',"SENSOR_ID":f'{600+x}',"VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     
