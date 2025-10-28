@@ -313,14 +313,22 @@ class UnitBoard:
             data.append((temp >> 8) & 0xff)        #big endian
             data.append(temp & 0xff)               #big endian
             data.append(int(self.config['GPIO_INIT'], base=16)) 
-            data.append(int(self.config['INVERTER_CLASS']))
+            data.append(int(self.config['RESERVED']))
             data.append(int(self.config['INVERTER_FREQUENCY']))
-            temp = int(self.config['INVERTER_MAX_RPM'])
+            temp = int(self.config['INVERTER_RPM'])
             data.append((temp >> 8) & 0xff)        #big endian
             data.append(temp & 0xff)               #big endian
             temp = int(self.config['INVERTER_MAX_HZ'])
             data.append((temp >> 8) & 0xff)        #big endian
             data.append(temp & 0xff)               #big endian
+            data.append(int(self.config['INVERTER_ACC_DECEL_TIME']))
+            data.append(int(self.config['MOTOR_POLE']))
+            data.append(int(self.config['TANK_TYPE']))     
+            data.append(int(self.config['RS485_1_USAGE']))
+            data.append(int(self.config['RS485_2_USAGE']))
+            data.append(int(self.config['RS485_3_USAGE']))
+            data.append(int(self.config['RS485_4_USAGE']))
+            data.append(int(self.config['RS232_1_USAGE']))
             # message의 data는 bytes형이 아니라면, int들의 list로 처리
             crc = self.crc16(data)
             # CRC16 2byte를 Little Endian으로 배열 뒤에 추가
