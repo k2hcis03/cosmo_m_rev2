@@ -63,7 +63,7 @@ class UnitBoardTempControl(threading.Thread):
     
         self.file_write = False             # CSV 파일을 새로 만들지 결정
         self.file_write_state = None        # CSV 파일 저장 조건 상태
-        self.file_index = 0
+        self.file_index = 0                 # CSV 파일 만들때 파일 번호
         self.timer_control_valve = False    # 타이머로 제어 할 때, 시간 마다 한 번만 제어 하기위한 변수
         self.motor_rpm = 0                  # 모터 현재 속도
         self.dir_name = None                # data 기록 디렉토리 생성 initial 상태에서 업데이트 됨
@@ -75,7 +75,7 @@ class UnitBoardTempControl(threading.Thread):
                     "CMD":"TEMP_VALVE",
                     "CHANNEL": x,
                     "VALUE" : value}
-        self.command_queue.put(message) 
+        self.command_queue.put(message, block=False) 
     
     def pid_task(self):    
         if self.pid_timer_call_time > 0 and self.temp_control_start:            
@@ -109,7 +109,7 @@ class UnitBoardTempControl(threading.Thread):
                                         "ONOFF" : 'ON', 
                                         "TIME" : ref_motor_time,
                                         "SEND" : False}    
-                        self.command_queue.put(message) 
+                        self.command_queue.put(message, block=False) 
                         # self.logging.info(f"{message['CMD']} command is inserted Unit Board")
             else:
                 if self.cold_valve_status == 1:
@@ -173,7 +173,7 @@ class UnitBoardTempControl(threading.Thread):
                                         "ONOFF" : 'ON', 
                                         "TIME" : ref_motor_time,
                                         "SEND" : False}    
-                            self.command_queue.put(message) 
+                            self.command_queue.put(message, block=False) 
                             # self.logging.info(f"{message['CMD']} command is inserted Unit Board")
                             # self.logging.info(f'id : {self.id} UnitBoard Temp Control Thread {x} Step Start at {time_start} Time')
                             self.timer_control_valve = True     # ref_step마다 한번씩 ON 해준다.
@@ -256,13 +256,26 @@ class UnitBoardTempControl(threading.Thread):
                     print(e)
 
 class UnitBoard:
-    def __init__(self, transmitte_queue, socket_send_queue, GPIOADDR, i2c_semaphor) -> None:
+    def __init__(self, transmitte_queue, socket_send_queue, GPIOADDR1, GPIOADDR2, i2c_semaphor) -> None:
         self.can_fd_transmitte_queue = transmitte_queue
         self.socket_send_queue = socket_send_queue
-        self.GPIOADDR = GPIOADDR
+        self.GPIOADDR1 = GPIOADDR1
+        self.GPIOADDR2 = GPIOADDR2
         self.i2c_semaphor = i2c_semaphor
         # self.pid_update()
-        
+    
+    # data 리스트에 있는 값들에 대해 CRC16 계산 후 data에 추가
+    def crc16(self, data: list):
+        crc = 0xFFFF
+        for d in data:
+            crc ^= d
+            for _ in range(8):
+                if crc & 1:
+                    crc = (crc >> 1) ^ 0xA001
+                else:
+                    crc >>= 1
+        return crc
+
     def unit_process(self, n, shm, arr, semaphor, receive_queue, cmd_queue, logging):
         new_shm = shared_memory.SharedMemory(name=shm)
         shared_memory_u = np.ndarray(arr.shape, dtype=arr.dtype, buffer=new_shm.buf)
@@ -283,7 +296,7 @@ class UnitBoard:
         except Exception as e:
             logging.error(f'id : {id} config.ini file open error')
             print(e)
-        shared_memory_u[0x1D + id * self.shared_memory_size] = os.getpid()       
+        shared_memory_u[id * self.shared_memory_size] = os.getpid()   # id는 shared memory에 첫 번째 데이터  
         # 온도조절 관련 쓰레드 생성 ##################################################
         temp_thread = UnitBoardTempControl(id, event, logging, self.can_fd_transmitte_queue, 
                                                            command_queue, 
@@ -292,17 +305,37 @@ class UnitBoard:
         ######################################################################################################################################################
         # 처음 부팅이 되면 환경 설정을 유닛보드로 전송 ################################
         # SET_CONFIG 명령어 수행
-        message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=0x300+id,  
-                                    data=[0xF2, 0x16, 0x0B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF3])
         try:
-            message.data[4] = int(self.config['MOTOR_ID'], base=16)
+            data = []
+            data.append(0x01)
+            data.append(int(self.config['MOTOR_ID'], base=16))
             temp = int(self.config['SLEEP_SPEED'])
-            message.data[6] = temp & 0xff               #big endian
-            message.data[5] = (temp >> 8) & 0xff        #big endian
-            message.data[7] = int(self.config['EXT_TEMP1_ID'], base=16) 
-            message.data[8] = int(self.config['EXT_TEMP2_ID'], base=16) 
-            message.data[9] = 1                         # 1 = GPIO초기화 
-            message.data[10] = 0xFF
+            data.append((temp >> 8) & 0xff)        #big endian
+            data.append(temp & 0xff)               #big endian
+            data.append(int(self.config['GPIO_INIT'], base=16)) 
+            data.append(int(self.config['RESERVED']))
+            data.append(int(self.config['INVERTER_FREQUENCY']))
+            temp = int(self.config['INVERTER_RPM'])
+            data.append((temp >> 8) & 0xff)        #big endian
+            data.append(temp & 0xff)               #big endian
+            temp = int(self.config['INVERTER_MAX_HZ'])
+            data.append((temp >> 8) & 0xff)        #big endian
+            data.append(temp & 0xff)               #big endian
+            data.append(int(self.config['INVERTER_ACC_DECEL_TIME']))
+            data.append(int(self.config['MOTOR_POLE']))
+            data.append(int(self.config['TANK_TYPE']))     
+            data.append(int(self.config['RS485_1_USAGE']))
+            data.append(int(self.config['RS485_2_USAGE']))
+            data.append(int(self.config['RS485_3_USAGE']))
+            data.append(int(self.config['RS485_4_USAGE']))
+            data.append(int(self.config['RS232_1_USAGE']))
+            # message의 data는 bytes형이 아니라면, int들의 list로 처리
+            crc = self.crc16(data)
+            # CRC16 2byte를 Little Endian으로 배열 뒤에 추가
+            data.append(crc & 0xFF)
+            data.append((crc >> 8) & 0xFF)
+            message = can.Message(is_extended_id=False, is_fd = True, bitrate_switch = True, arbitration_id=id,  
+                                    data=bytearray(data))
         except ValueError as e:
             print(e)
             
@@ -315,8 +348,11 @@ class UnitBoard:
         if not can_fd_receive_queue.empty():
             logging.info(f'id : {id} unit board is initialized')    
             message = can_fd_receive_queue.get()
-            fw_version = (message.data[4] << 8) | (message.data[5])
-            logging.info(f'id : {id} firmware version is : {fw_version * 0.01 : 0.2F}')
+            if message.data[3] == 1:            # 1 : 정상, 0 : 오류
+                fw_version = (message.data[1] << 8) | (message.data[2])
+                logging.info(f'id : {id} firmware version is : {fw_version * 0.01 : 0.2F}')
+            else:
+                logging.warning(f'id : {id} unit board is wrong response')
         else:
             logging.warning(f'id : {id} unit board is not response')    
         ######################################################################################################################################################                        
@@ -341,9 +377,9 @@ class UnitBoard:
                 self.i2c_semaphor.acquire()
                 i2cbus = smbus.SMBus(1)
                 if int(command['UNIT_ID']) < 14:
-                    i2cbus.write_byte_data(self.GPIOADDR, 0x12, 0xFF & (~(int(command['UNIT_ID']) + 1)))
+                    i2cbus.write_byte_data(self.GPIOADDR1, 0x12, 0xFF & (~(int(command['UNIT_ID']) + 1)))
                 else:
-                    i2cbus.write_byte_data(self.GPIOADDR, 0x13, 0xFF & (~(int(command['UNIT_ID']) + 1)))
+                    i2cbus.write_byte_data(self.GPIOADDR1, 0x13, 0xFF & (~(int(command['UNIT_ID']) + 1)))
                 self.i2c_semaphor.release()
                 if not command:
                     logging.warning(f'id : {id} Timeout waiting for command')
@@ -414,52 +450,15 @@ class UnitBoard:
                             
                             if command['DATA'][id]['STATUS'] == 'Run' and int(command['DATA'][id]['STAGE']) != old_stage:
                                 shared_memory_u[0x17 + id*self.shared_memory_size] = 0
-                            self.old_stage = int(command['DATA'][id]['STAGE'])
-                    elif command['CMD'] == 'SET_MOTOR':
-                        if int(self.config['ADDRESS'], 16) != 0xFFF:
-                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=0x300+id,  
-                                        data=[0xF2, 0x11, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF3])
-                            temp = int(command['SPEED'])
-                            message.data[5] = temp & 0xff               # big endian
-                            message.data[4] = (temp >> 8) & 0xff        # big endian
-                            if command['DIR'] == 'FW':
-                                message.data[6] = 1
-                            else:
-                                message.data[6] = 0
-                            if command['ONOFF'] == 'ON':
-                                message.data[7] = 1
-                            else:
-                                message.data[7] = 0
-                                
-                            while not can_fd_receive_queue.empty():
-                                can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
-                            
-                            self.can_fd_transmitte_queue.put(message) 
-                            # time.sleep(0.40)
-                            wait = 0
-                            while can_fd_receive_queue.empty():
-                                time.sleep(0.01)
-                                wait += 1
-                                if wait > 120:
-                                    break
-                            if not can_fd_receive_queue.empty():
-                                message = can_fd_receive_queue.get()
-                                if message.data[1] == 0x11:
-                                    logging.info(f'id : {id} Received message: {message}')
-                                    if self.socket_send_queue:
-                                        if message.data[4] == 1:
-                                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":f"success!"}), 'UTF-8'))
-                                        else:
-                                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'))
-                                else:
-                                    logging.warning(f'id : {id} {command["CMD"]} unit board is wrong response')  
-                            else:
-                                logging.warning(f'id : {id} {command["CMD"]} unit board is not response')   
-                            # logging.info(f'id : {id} UnitBoard execute {command["CMD"]}')            
+                            self.old_stage = int(command['DATA'][id]['STAGE'])   
                     elif command['CMD'] == 'GET_ADC':
                         if int(self.config['ADDRESS'], base=16) != 0xFFF:
-                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=0x300+id,  
-                                        data=[0xF2, 0x12, 0x05, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, 0xF3])
+                            data = [0x03]
+                            crc = self.crc16(data)
+                            data.append(crc & 0xFF)
+                            data.append((crc >> 8) & 0xFF)
+                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = True,
+                                        data=bytearray(data))
                             
                             while not can_fd_receive_queue.empty():
                                 can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
@@ -474,24 +473,28 @@ class UnitBoard:
                                     break
                             if not can_fd_receive_queue.empty():
                                 message = can_fd_receive_queue.get()
-                                if message.data[1] == 0x12:
+                                if message.data[0] == 0x03:
                                     logging.info(f'id : {id} Received message: {message}')
                                     unit_semaphor.acquire()
-                                    shared_memory_u[0x00 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[4] << 8) | (np.int32)(message.data[5]))
-                                    shared_memory_u[0x01 + id*self.shared_memory_size]  = (np.int32)((np.int32)(message.data[6] << 8) | (np.int32)(message.data[7]))
-                                    shared_memory_u[0x02 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[8] << 8) | (np.int32)(message.data[9]))
-                                    shared_memory_u[0x03 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[10] << 8) | (np.int32)(message.data[11]))
-                                    shared_memory_u[0x04 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[12] << 8) | (np.int32)(message.data[13]))
-                                    shared_memory_u[0x05 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[14] << 8) | (np.int32)(message.data[15]))
+                                    shared_memory_u[0x01 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[1] << 8) | (np.int32)(message.data[2]))
+                                    shared_memory_u[0x02 + id*self.shared_memory_size]  = (np.int32)((np.int32)(message.data[3] << 8) | (np.int32)(message.data[4]))
+                                    shared_memory_u[0x03 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[5] << 8) | (np.int32)(message.data[6]))
+                                    shared_memory_u[0x04 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[7] << 8) | (np.int32)(message.data[8]))
+                                    shared_memory_u[0x05 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[9] << 8) | (np.int32)(message.data[10]))
+                                    shared_memory_u[0x06 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[11] << 8) | (np.int32)(message.data[12]))
+                                    shared_memory_u[0x07 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[13] << 8) | (np.int32)(message.data[14]))
+                                    shared_memory_u[0x08 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[15] << 8) | (np.int32)(message.data[16]))
                                     unit_semaphor.release()
-                                    if self.socket_send_queue:
+                                    if command['SEND'] and self.socket_send_queue:
                                         self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"success!", 
-                                                    "ADC0": f'{shared_memory_u[0x00 + id*self.shared_memory_size]}',
-                                                    "ADC1": f'{shared_memory_u[0x01 + id*self.shared_memory_size]}',
-                                                    "ADC2": f'{shared_memory_u[0x02 + id*self.shared_memory_size]}',
-                                                    "ADC3": f'{shared_memory_u[0x03 + id*self.shared_memory_size]}',
-                                                    "ADC4": f'{shared_memory_u[0x04 + id*self.shared_memory_size]}',
-                                                    "ADC5": f'{shared_memory_u[0x05 + id*self.shared_memory_size]}'}), 'UTF-8'))
+                                                    "ADC1": f'{shared_memory_u[0x01 + id*self.shared_memory_size] * 0.001}',
+                                                    "ADC2": f'{shared_memory_u[0x02 + id*self.shared_memory_size] * 0.001}',
+                                                    "ADC3": f'{shared_memory_u[0x03 + id*self.shared_memory_size] * 0.001}',
+                                                    "ADC4": f'{shared_memory_u[0x04 + id*self.shared_memory_size] * 0.001}',
+                                                    "ADC5": f'{shared_memory_u[0x05 + id*self.shared_memory_size] * 0.001}',
+                                                    "ADC6": f'{shared_memory_u[0x06 + id*self.shared_memory_size] * 0.001}',
+                                                    "ADC7": f'{shared_memory_u[0x07 + id*self.shared_memory_size] * 0.001}',
+                                                    "ADC8": f'{shared_memory_u[0x08 + id*self.shared_memory_size] * 0.001}'}), 'UTF-8'), block=False)
                                 else:
                                     logging.warning(f'id : {id} {command["CMD"]} unit board is wrong response') 
                             else:
@@ -499,12 +502,17 @@ class UnitBoard:
                             # logging.info(f'id : {id} UnitBoard execute {command["CMD"]}')
                     elif command['CMD'] == 'SET_GPIO':
                         if int(self.config['ADDRESS'], base=16) != 0xFFF:
-                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=0x300+id,  
-                                        data=[0xF2, 0x13, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                                                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF3])
-                            message.data[4] = len(command['NUM'])
-                            for i in range(message.data[4]):
-                                message.data[5 + i] = command['VALUE'][i]
+                            data = [0x05]
+                            value = 0
+                            for i in range(len(command['VALUE'])):
+                                temp = 0 if command['VALUE'][i] == False else 1
+                                value |= temp << i
+                            data.append(value)
+                            crc = self.crc16(data)
+                            data.append(crc & 0xFF)
+                            data.append((crc >> 8) & 0xFF)
+                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = True,
+                                        data=bytearray(data))
                             
                             while not can_fd_receive_queue.empty():
                                 can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
@@ -516,13 +524,15 @@ class UnitBoard:
                                 wait += 1
                                 if wait > 120:
                                     break
-                            
                             if not can_fd_receive_queue.empty():
                                 message = can_fd_receive_queue.get()
-                                if message.data[1] == 0x13:
+                                if message.data[0] == 0x05:
                                     logging.info(f'id : {id} Received message: {message}')
-                                    if self.socket_send_queue:
-                                        self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"success!"}), 'UTF-8'))
+                                    if command['SEND'] and self.socket_send_queue:
+                                        if message.data[1] == 1:
+                                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"success!"}), 'UTF-8'), block=False)
+                                        else:
+                                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'), block=False)
                                 else:
                                     logging.warning(f'id : {id} {command["CMD"]} unit board is wrong response') 
                             else:
@@ -531,9 +541,14 @@ class UnitBoard:
                     elif command['CMD'] == 'GET_STATUS':
                         if int(self.config['ADDRESS'], base=16) != 0xFFF:
                             # 온도계산 전에 GET_ADC를 호출 함. --> 명령어를 통합하여 ADC 값까지 GET_STATUS에서 읽어 옴.
-                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=0x300+id,  
-                                        data=[0xF2, 0x14, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF3])
-                            
+                            data = [0x02]
+                            crc = self.crc16(data)
+                            # CRC16 2byte를 Little Endian으로 배열 뒤에 추가
+                            data.append(crc & 0xFF)
+                            data.append((crc >> 8) & 0xFF)
+                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = True,
+                                        data=bytearray(data))   # message.data가 최대 길이 넘지 않게 조정 (CAN FD 사용시 유동적일 수 있음)
+
                             while not can_fd_receive_queue.empty():
                                 can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
                             
@@ -543,84 +558,129 @@ class UnitBoard:
                                 time.sleep(0.01)
                                 wait += 1
                                 if wait > 120:
-                                    break
-                            
+                                    break                           
                             if not can_fd_receive_queue.empty():
                                 message = can_fd_receive_queue.get()
-                                if message.data[1] == 0x14:
+                                
+                                if message.data[0] == 0x02:
                                     if command['SEND']:                      # 로고에 너무 많이 쌓이는 데이터 방지, 
                                         logging.info(f'id : {id} Received message: {message}')
-                                    inclination1 = 77.5 / (float(self.config['TEMP1_77_5']) - float(self.config['TEMP1_0']))
-                                    y_offset1 = inclination1 * float(self.config['TEMP1_0'])
-                                    
-                                    inclination2 = 77.5 / (float(self.config['TEMP2_77_5']) - float(self.config['TEMP2_0']))
-                                    y_offset2 = inclination2 * float(self.config['TEMP2_0'])
-                                    
-                                    inclination3 = 77.5 / (float(self.config['TEMP3_77_5']) - float(self.config['TEMP3_0']))
-                                    y_offset3 = inclination3 * float(self.config['TEMP3_0'])
-                                    
-                                    inclination4 = 77.5 / (float(self.config['TEMP4_77_5']) - float(self.config['TEMP4_0']))
-                                    y_offset4 = inclination4 * float(self.config['TEMP4_0'])
-                                    
-                                    inclination5 = 77.5 / (float(self.config['TEMP5_77_5']) - float(self.config['TEMP5_0']))
-                                    y_offset5 = inclination3 * float(self.config['TEMP5_0'])
-                                    
-                                    inclination6 = 77.5 / (float(self.config['TEMP6_77_5']) - float(self.config['TEMP6_0']))
-                                    y_offset6 = inclination4 * float(self.config['TEMP6_0'])
                                         
                                     unit_semaphor.acquire()
-                                    shared_memory_u[0x06 + id*self.shared_memory_size] = (np.int32)(message.data[7] << 24 | message.data[6] << 16 
-                                                                    | message.data[5] << 8 | message.data[4])
-                                    shared_memory_u[0x07 + id*self.shared_memory_size] = (np.int32)(message.data[9] << 8 | message.data[8])
-                                    shared_memory_u[0x08 + id*self.shared_memory_size] = (np.int32)(message.data[13] << 24 | message.data[12] << 16 
-                                                                    | message.data[11] << 8 | message.data[10])
-                                    shared_memory_u[0x09 + id*self.shared_memory_size] = (np.int32)(message.data[14])
-                                    shared_memory_u[0x0A + id*self.shared_memory_size] = (np.int32)(message.data[15] << 8 | message.data[16]) #RPM
-                                    shared_memory_u[0x0B + id*self.shared_memory_size] = (np.int32)(message.data[17] << 8 | message.data[18]) #load cell
+
+                                    I_mA = (np.float32)(message.data[1] << 8 | message.data[2])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
+                                    T = -10 + (I_mA - 4) * (110) / 16                  
+                                    shared_memory_u[0x0B + id*self.shared_memory_size] = (np.int32)(T * 1000)
+
+                                    I_mA = (np.float32)(message.data[3] << 8 | message.data[4])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
+                                    T = -10 + (I_mA - 4) * (110) / 16                   
+                                    shared_memory_u[0x0C + id*self.shared_memory_size] = (np.int32)(T * 1000)
+
+                                    I_mA = (np.float32)(message.data[5] << 8 | message.data[6])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
+                                    T = -10 + (I_mA - 4) * (110) / 16                   
+                                    shared_memory_u[0x0D + id*self.shared_memory_size] = (np.int32)(T * 1000)
+
+                                    I_mA = (np.float32)(message.data[7] << 8 | message.data[8])*0.001
+                                    T = -10 + (I_mA - 4) * (110) / 16                  
+                                    shared_memory_u[0x0E + id*self.shared_memory_size] = (np.int32)(T * 1000)
+
+                                    I_mA = (np.float32)(message.data[9] << 8 | message.data[10])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
+                                    T = -10 + (I_mA - 4) * (110) / 16                    
+                                    shared_memory_u[0x0F + id*self.shared_memory_size] = (np.int32)(T * 1000)
+
+                                    I_mA = (np.float32)(message.data[11] << 8 | message.data[12])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
+                                    T = -10 + (I_mA - 4) * (110) / 16                             
+                                    shared_memory_u[0x10 + id*self.shared_memory_size] = (np.int32)(T * 1000)
+
+                                    I_mA = (np.float32)(message.data[13] << 8 | message.data[14])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
+                                    T = -10 + (I_mA - 4) * (110) / 16                   
+                                    shared_memory_u[0x11 + id*self.shared_memory_size] = (np.int32)(T * 1000)
+
+                                    I_mA = (np.float32)(message.data[15] << 8 | message.data[16])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
+                                    T = -10 + (I_mA - 4) * (110) / 16                   #-10 ~ 100 C -> 4mA ~ 20mA  유닛보드에서 * 1000이 되므로 여기서 4->4000, 16->16
+                                    shared_memory_u[0x12 + id*self.shared_memory_size] = (np.int32)(T * 1000)
                                     
-                                    shared_memory_u[0x0C + id*self.shared_memory_size] = (np.int32)(message.data[19] << 8 | message.data[20]) #Ext Temp1
-                                    shared_memory_u[0x0D + id*self.shared_memory_size] = (np.int32)(message.data[21] << 8 | message.data[22]) #Ext Humi1
-                                    shared_memory_u[0x0E + id*self.shared_memory_size] = (np.int32)(message.data[23] << 8 | message.data[24]) #Ext Temp2
-                                    shared_memory_u[0x0F + id*self.shared_memory_size] = (np.int32)(message.data[25] << 8 | message.data[26]) #Ext Humi2
+                                    if int(self.config['TANK_TYPE']) == 1 or int(self.config['TANK_TYPE']) == 2: #발효, 제성
+                                        rs485_1 = (np.int32)(message.data[17] << 8 | message.data[18])
+                                        shared_memory_u[0x23 + id*self.shared_memory_size] = rs485_1       #보드에 따라 RPM 또는 다른 센서 값
+                                        rs485_2 = (np.int32)(message.data[19] << 8 | message.data[20])
+                                        shared_memory_u[0x24 + id*self.shared_memory_size] = rs485_2      #보드에 따라 load cell 또는 다른 센서 값
+                                        rs485_3 = (np.int32)(message.data[21] << 8 | message.data[22])
+                                        shared_memory_u[0x28 + id*self.shared_memory_size] = rs485_3      #보드에 따라 ph 또는 다른 센서 값
+                                        rs485_4 = (np.int32)(message.data[23] << 8 | message.data[24])
+                                        shared_memory_u[0x26 + id*self.shared_memory_size] = rs485_4      #보드에 따라 Co2 또는 다른 센서 값
+                                        # rs232_1 = (np.float32)(message.data[25] << 8 | message.data[26]) * 0.001
+                                        # shared_memory_u[0x27 + id*self.shared_memory_size] = (np.int32)(rs232_1)      #보드에 따라 Flower 또는 다른 센서 값
+                                    elif int(self.config['TANK_TYPE']) == 3: #숙성
+                                        rs485_1 = (np.int32)(message.data[17] << 8 | message.data[18])
+                                        shared_memory_u[0x28 + id*self.shared_memory_size] = rs485_1       #보드에 따라 PH 또는 다른 센서 값
+                                    elif int(self.config['TANK_TYPE']) == 4: #제품
+                                        rs485_1 = (np.int32)(message.data[17] << 8 | message.data[18])
+                                        shared_memory_u[0x23 + id*self.shared_memory_size] = rs485_1       #보드에 따라 RPM 또는 다른 센서 값
+                                        rs485_2 = (np.int32)(message.data[19] << 8 | message.data[20])
+                                        shared_memory_u[0x24 + id*self.shared_memory_size] = rs485_2      #보드에 따라 load cell 또는 다른 센서 값
+                                        rs485_3 = (np.int32)(message.data[21] << 8 | message.data[22])
+                                        shared_memory_u[0x28 + id*self.shared_memory_size] = rs485_3      #보드에 따라 ph 또는 다른 센서 값
+                                    elif int(self.config['TANK_TYPE']) == 5: #냉각수
+                                        pass
+                                    elif int(self.config['TANK_TYPE']) == 6: #물
+                                        rs485_1 = (np.int32)(message.data[17] << 8 | message.data[18])
+                                        shared_memory_u[0x23 + id*self.shared_memory_size] = rs485_1       #보드에 따라 RPM 또는 다른 센서 값
+                                        rs485_2 = (np.int32)(message.data[19] << 8 | message.data[20])
+                                        shared_memory_u[0x24 + id*self.shared_memory_size] = rs485_2      #보드에 따라 load cell 또는 다른 센서 값
+                                    elif int(self.config['TANK_TYPE']) == 7: #밑술
+                                        pass
+                                    elif int(self.config['TANK_TYPE']) == 8: #펌프  
+                                        pass
+                                    elif int(self.config['TANK_TYPE']) == 9: #기타
+                                        rs485_1 = (np.int32)(message.data[17] << 8 | message.data[18])
+                                        shared_memory_u[0x27 + id*self.shared_memory_size] = rs485_1       #보드에 따라 유량량 또는 다른 센서 값
+                                        rs485_2 = (np.int32)(message.data[19] << 8 | message.data[20])
+                                        shared_memory_u[0x28 + id*self.shared_memory_size] = rs485_2      #보드에 따라 brix 또는 다른 센서 값
                                     
                                     # ADC 값
-                                    shared_memory_u[0x00 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[27] << 8) | (np.int32)(message.data[28]))
-                                    shared_memory_u[0x01 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[29] << 8) | (np.int32)(message.data[30]))
-                                    shared_memory_u[0x02 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[31] << 8) | (np.int32)(message.data[32]))
-                                    shared_memory_u[0x03 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[33] << 8) | (np.int32)(message.data[34]))
-                                    shared_memory_u[0x04 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[35] << 8) | (np.int32)(message.data[36]))
-                                    shared_memory_u[0x05 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[37] << 8) | (np.int32)(message.data[38]))
+                                    shared_memory_u[0x01 + id*self.shared_memory_size] = (np.int32)((message.data[1] << 8) | message.data[2])
+                                    shared_memory_u[0x02 + id*self.shared_memory_size] = (np.int32)((message.data[3] << 8) | message.data[4])
+                                    shared_memory_u[0x03 + id*self.shared_memory_size] = (np.int32)((message.data[5] << 8) | message.data[6])
+                                    shared_memory_u[0x04 + id*self.shared_memory_size] = (np.int32)((message.data[7] << 8) | message.data[8])
+                                    shared_memory_u[0x05 + id*self.shared_memory_size] = (np.int32)((message.data[9] << 8) | message.data[10])
+                                    shared_memory_u[0x06 + id*self.shared_memory_size] = (np.int32)((message.data[11] << 8) | message.data[12])
+                                    shared_memory_u[0x07 + id*self.shared_memory_size] = (np.int32)((message.data[13] << 8) | message.data[14])
+                                    shared_memory_u[0x08 + id*self.shared_memory_size] = (np.int32)((message.data[15] << 8) | message.data[16])
 
                                     # ADC 값에 온도 계산식을 추가해서 공유메모리에 저장 여기서는 2개만 계산하고 필요하면 추가.
-                                    shared_memory_u[0x10 + id*self.shared_memory_size] = float(f'{(inclination1 * shared_memory_u[0 + id*self.shared_memory_size] - y_offset1) * 100 : 0.2F}')
-                                    shared_memory_u[0x11 + id*self.shared_memory_size] = float(f'{(inclination2 * shared_memory_u[1 + id*self.shared_memory_size] - y_offset2) * 100 : 0.2F}')
+                                    # shared_memory_u[0x10 + id*self.shared_memory_size] = float(f'{(inclination1 * shared_memory_u[0 + id*self.shared_memory_size] - y_offset1) * 100 : 0.2F}')
+                                    # shared_memory_u[0x11 + id*self.shared_memory_size] = float(f'{(inclination2 * shared_memory_u[1 + id*self.shared_memory_size] - y_offset2) * 100 : 0.2F}')
                                     
-                                    shared_memory_u[0x12 + id*self.shared_memory_size] = float(f'{(inclination3 * shared_memory_u[2 + id*self.shared_memory_size] - y_offset3) * 100 : 0.2F}')
-                                    shared_memory_u[0x13 + id*self.shared_memory_size] = float(f'{(inclination4 * shared_memory_u[3 + id*self.shared_memory_size] - y_offset4) * 100 : 0.2F}')
+                                    # shared_memory_u[0x12 + id*self.shared_memory_size] = float(f'{(inclination3 * shared_memory_u[2 + id*self.shared_memory_size] - y_offset3) * 100 : 0.2F}')
+                                    # shared_memory_u[0x13 + id*self.shared_memory_size] = float(f'{(inclination4 * shared_memory_u[3 + id*self.shared_memory_size] - y_offset4) * 100 : 0.2F}')
                                     
-                                    shared_memory_u[0x14 + id*self.shared_memory_size] = float(f'{(inclination5 * shared_memory_u[4 + id*self.shared_memory_size] - y_offset5) * 100 : 0.2F}')
-                                    shared_memory_u[0x15 + id*self.shared_memory_size] = float(f'{(inclination6 * shared_memory_u[5 + id*self.shared_memory_size] - y_offset6) * 100 : 0.2F}')
+                                    # shared_memory_u[0x14 + id*self.shared_memory_size] = float(f'{(inclination5 * shared_memory_u[4 + id*self.shared_memory_size] - y_offset5) * 100 : 0.2F}')
+                                    # shared_memory_u[0x15 + id*self.shared_memory_size] = float(f'{(inclination6 * shared_memory_u[5 + id*self.shared_memory_size] - y_offset6) * 100 : 0.2F}')
+                                    shared_memory_u[0x1A + id*self.shared_memory_size] = (np.int32)(message.data[27])     #GPO 7~0
+                                    shared_memory_u[0x1C + id*self.shared_memory_size] = (np.int32)(message.data[28])    #GPI 7~0
+
+                                    shared_memory_u[0x1E + id*self.shared_memory_size] = (np.int32)(message.data[29])    #inverter 상태
+                                    # shared_memory_u[0x1F + id*self.shared_memory_size] = (np.int32)(message.data[30])    #inverter 상태
                                     unit_semaphor.release()
                                     
                                     # print(f'top temp. is {shared_memory_u[0x10 + id*self.shared_memory_size]*0.01:0.2F} and bottom temp. is {shared_memory_u[0x11 + id*self.shared_memory_size]*0.01}')
                                     # shared_memory_u[0x12 + id*self.shared_memory_size] = float(f'{(inclination3 * shared_memory_u[2 + id*self.shared_memory_size] - y_offset3) * 100 : 0.2F}')
                                     # shared_memory_u[0x13 + id*self.shared_memory_size] = float(f'{(inclination4 * shared_memory_u[3 + id*self.shared_memory_size] - y_offset4) * 100 : 0.2F}')
                                         
-                                    if command['SEND'] and self.socket_send_queue:
+                                    if command['SEND'] and self.socket_send_queue:  # SEND는 자체 jsonserver_send.py에서 처리하므로 여기서는 처리하지 않음.
                                         self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"success!", 
-                                            "TEMP1" : f'{shared_memory_u[0x10 + id*self.shared_memory_size] * 0.01: 0.2F}',
-                                            "TEMP2" : f'{shared_memory_u[0x11 + id*self.shared_memory_size] * 0.01: 0.2F}',
-                                            "GPO4~GPO1": f'{shared_memory_u[0x06 + id*self.shared_memory_size]}',
-                                            "GPO8~GPO5": f'{shared_memory_u[0x07 + id*self.shared_memory_size]}',
-                                            "GPI4~GPI1": f'{shared_memory_u[0x08 + id*self.shared_memory_size]}',
-                                            "GPI8~GPI5": f'{shared_memory_u[0x09 + id*self.shared_memory_size]}',
-                                            "RPM": f'{shared_memory_u[0x0A + id*self.shared_memory_size]}',
-                                            "LOAD CELL": f'{shared_memory_u[0x0B + id*self.shared_memory_size] * 0.01 : 0.2F}kg',
-                                            "EXTTEMP1": f'{shared_memory_u[0x0C + id*self.shared_memory_size] * 0.01 : 0.2F}C',
-                                            "EXTHUMI1": f'{shared_memory_u[0x0D + id*self.shared_memory_size] * 0.01 : 0.2F}%',
-                                            "EXTTEMP2": f'{shared_memory_u[0x0E + id*self.shared_memory_size] * 0.01 : 0.2F}C',
-                                            "EXTHUMI2": f'{shared_memory_u[0x0F + id*self.shared_memory_size] * 0.01 : 0.2F}%',
-                                            }), 'UTF-8'))
+                                            "TEMP1" : f'{shared_memory_u[0x0B + id*self.shared_memory_size] * 0.001: 0.2F}',
+                                            "TEMP2" : f'{shared_memory_u[0x0C + id*self.shared_memory_size] * 0.001: 0.2F}',
+                                            "GPO7~GPO0": f'{shared_memory_u[0x1A + id*self.shared_memory_size]}',
+                                            "GPI7~GPI0": f'{shared_memory_u[0x1C + id*self.shared_memory_size]}',
+                                            "RPM": f'{shared_memory_u[0x23 + id*self.shared_memory_size]}',
+                                            "LOAD CELL": f'{shared_memory_u[0x24 + id*self.shared_memory_size] * 0.001 : 0.2F}kg',
+                                            "SENSOR1": f'{shared_memory_u[0x25 + id*self.shared_memory_size] * 0.001 : 0.2F}',
+                                            "SENSOR2": f'{shared_memory_u[0x26 + id*self.shared_memory_size] * 0.001 : 0.2F}%',
+                                            "SENSOR3": f'{shared_memory_u[0x27 + id*self.shared_memory_size] * 0.001 : 0.2F}%',
+                                            "SENSOR4": f'{shared_memory_u[0x28 + id*self.shared_memory_size] * 0.001 : 0.2F}%'
+                                            }), 'UTF-8'), block=False)
                                 else:
                                     logging.warning(f'id : {id} {command["CMD"]} unit board is wrong response')
                             else:
@@ -631,37 +691,38 @@ class UnitBoard:
                             event.set()
                             temp_thread.temp_control_start = True
                             
-                            if self.socket_send_queue:
-                                self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"success!"}), 'UTF-8'))
+                            if command['SEND'] and self.socket_send_queue:
+                                self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"success!"}), 'UTF-8'), block=False)
                             # logging.info(f'id : {id} UnitBoard execute {command["CMD"]}')
                     elif command['CMD'] == 'STOP_TEMP':
                         if int(self.config['ADDRESS'], base=16) != 0xFFF:
                             temp_thread.temp_control_start = False
                             
-                            if self.socket_send_queue:
-                                self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"success!"}), 'UTF-8'))
+                            if command['SEND'] and self.socket_send_queue:
+                                self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"success!"}), 'UTF-8'), block=False)
                             # logging.info(f'id : {id} UnitBoard execute {command["CMD"]}')
                     elif command['CMD'] == 'TEMP_RPM':
                         if int(self.config['ADDRESS'], base=16) != 0xFFF:
-                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=0x300+id,  
-                                        data=[0xF2, 0x17, 0x0B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF3])
-
+                            data = [0x07]
                             temp = int(command['SPEED'])
-                            message.data[5] = temp & 0xff               # big endian
-                            message.data[4] = (temp >> 8) & 0xff        # big endian
-                            if command['DIR'] == 'FW':
-                                message.data[6] = 1
-                            else:
-                                message.data[6] = 0
-                            if command['ONOFF'] == 'ON':
-                                message.data[7] = 1
-                            else:
-                                message.data[7] = 0
+                            data.append((temp >> 8) & 0xff)        # big endian
+                            data.append(temp & 0xff)               # big endian
                             
-                            temp = int(command['TIME'])
-                            message.data[9] = temp & 0xff               # big endian
-                            message.data[8] = (temp >> 8) & 0xff        # big endian
+                            if command['DIR'] == 'FW':
+                                data.append(1)
+                            else:
+                                data.append(0)
+                            if command['ONOFF'] == 'ON':
+                                data.append(1)
+                            else:
+                                data.append(0)
                                 
+                            crc = self.crc16(data)
+                            data.append(crc & 0xFF)
+                            data.append((crc >> 8) & 0xFF)
+                            message = can.Message(is_extended_id=False, is_fd = True, bitrate_switch = True, arbitration_id=id,  
+                                        data=bytearray(data))
+                            
                             while not can_fd_receive_queue.empty():
                                 can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
                             
@@ -671,17 +732,16 @@ class UnitBoard:
                                 time.sleep(0.01)
                                 wait += 1
                                 if wait > 120:
-                                    break
-                            
+                                    break                           
                             if not can_fd_receive_queue.empty():
                                 message = can_fd_receive_queue.get()
-                                if message.data[1] == 0x17:
+                                if message.data[0] == 0x07:
                                     logging.info(f'id : {id} Received message: {message}')
                                     if command['SEND'] and self.socket_send_queue:
-                                        if message.data[4] == 1:
-                                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":f"success!"}), 'UTF-8'))
+                                        if message.data[1] == 1:
+                                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":f"success!"}), 'UTF-8'), block=False)
                                         else:
-                                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'))
+                                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'), block=False)
                                 else:
                                     logging.warning(f'id : {id} {command["CMD"]} unit board is wrong response')  
                             else:
@@ -689,12 +749,15 @@ class UnitBoard:
                             # logging.info(f'id : {id} UnitBoard execute {command["CMD"]}')
                     elif command['CMD'] == 'TEMP_VALVE':
                         if int(self.config['ADDRESS'], 16) != 0xFFF:
-                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=0x300+id,  
-                                        data=[0xF2, 0x18, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF3])
-
-                            message.data[4] = int(command['CHANNEL'])             
-                            message.data[5] = command['VALUE']          # 유닛보드에서 설정된 포트 값
-                                
+                            data = [0x08]
+                            data.append(int(command['CHANNEL']))
+                            data.append(int(command['VALUE']))
+                            crc = self.crc16(data)
+                            data.append(crc & 0xFF)
+                            data.append((crc >> 8) & 0xFF)
+                            message = can.Message(is_extended_id=False, is_fd = True, bitrate_switch = True, arbitration_id=id,  
+                                        data=bytearray(data))
+                            
                             while not can_fd_receive_queue.empty():
                                 can_fd_receive_queue.get()              # as docs say: Remove and return an item from the queue.
                             
@@ -705,18 +768,17 @@ class UnitBoard:
                                 wait += 1
                                 if wait > 120:
                                     break
-                            
                             if not can_fd_receive_queue.empty():
                                 message = can_fd_receive_queue.get()
-                                if message.data[1] == 0x18:
+                                if message.data[0] == 0x08:
                                     logging.info(f'id : {id} Received message: {message}')
                                     # temp_thread.set_cold_valve(message.data[5])   # 지속적인 재전송을 원하면 주석 해제. 
                                     
-                                    if self.socket_send_queue:
-                                        if message.data[4] == 1:
-                                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":f"success!"}), 'UTF-8'))
+                                    if command['SEND'] and self.socket_send_queue:
+                                        if message.data[1] == 1:
+                                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":f"success!"}), 'UTF-8'), block=False)
                                         else:
-                                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'))
+                                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'), block=False)
                                 else:
                                     logging.warning(f'id : {id} {command["CMD"]} unit board is wrong response')  
                             else:
@@ -724,15 +786,19 @@ class UnitBoard:
                             # logging.info(f'id : {id} UnitBoard execute {command["CMD"]}')   
                     elif command['CMD'] == 'WEIGHT_VALVE':
                         if int(self.config['ADDRESS'], base=16) != 0xFFF:
-                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=0x300+id,  
-                                        data=[0xF2, 0x19, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF3])
+                            data = [0x09]
+                            data.append(int(command['CHANNEL']))
+                            data.append(int(command['VALUE']))
+                            temp = command['WEIGHT']               # int(float(command['CTRL'][0]['PARAM1']) * 10) 
+                            data.append((temp >> 8) & 0xff)        # big endian
+                            data.append(temp & 0xff)               # big endian
                             
-                            temp = command['WEIGHT']                    # int(float(command['CTRL'][0]['PARAM1']) * 10) 
-                            message.data[4] = int(command['CHANNEL']) 
-                            message.data[5] = command['VALUE']
-                            message.data[7] = temp & 0xff               # big endian
-                            message.data[6] = (temp >> 8) & 0xff        # big endian
-                            message.data[8] = command['ONTIME']
+                            data.append(int(command['ONTIME']))
+                            crc = self.crc16(data)
+                            data.append(crc & 0xFF)
+                            data.append((crc >> 8) & 0xFF)
+                            message = can.Message(is_extended_id=False, is_fd = True, bitrate_switch = True, arbitration_id=id,  
+                                        data=bytearray(data))
                                 
                             while not can_fd_receive_queue.empty():
                                 can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
@@ -747,8 +813,12 @@ class UnitBoard:
                                     break
                             if not can_fd_receive_queue.empty():
                                 message = can_fd_receive_queue.get()
-                                if message.data[1] == 0x19:
+                                if message.data[0] == 0x09:
                                     logging.info(f'id : {id} Received message: {message}')
+                                    if message.data[1] == 1:
+                                        self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":f"success!"}), 'UTF-8'), block=False)
+                                    else:
+                                        self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'), block=False)
                                 else:
                                     logging.warning(f'id : {id} {command["CMD"]} unit board is wrong response')  
                             else:
@@ -765,7 +835,7 @@ class UnitBoard:
                                             "CMD":"TEMP_VALVE",
                                             "CHANNEL": x,
                                             "VALUE" : value}
-                                command_queue.put(message) 
+                                command_queue.put(message, block=False) 
                             elif command['CTRL'][0]['SENSOR_ID'] == '501':  #밸브는 4개 밸브 아이디는 500부터 시작 501-> 워터
                                 x = self.config["SOLVALVE1"]                #밸브 I/O 번호
                                 if command['CTRL'][0]['PARAM0'] == 'ON':
@@ -781,7 +851,7 @@ class UnitBoard:
                                             "VALUE" : value,
                                             "WEIGHT" : temp, 
                                             "ONTIME" : ontime}
-                                command_queue.put(message)
+                                command_queue.put(message, block=False)
                             elif command['CTRL'][0]['SENSOR_ID'] == '502':
                                 pass
                             elif command['CTRL'][0]['SENSOR_ID'] == '503':
@@ -795,11 +865,13 @@ class UnitBoard:
                                         "DIR"   : 'FW',            #FW = forward, RV = reverse
                                         "ONOFF" : 'ON', 
                                         "TIME" : run_time,
-                                        "SEND" : False}    
-                                command_queue.put(message)
+                                        "SEND" : True}    
+                                command_queue.put(message, block=False)
                 self.i2c_semaphor.acquire()
-                i2cbus.write_byte_data(self.GPIOADDR, 0x12, 0xFF)
-                i2cbus.write_byte_data(self.GPIOADDR, 0x13, 0xFF)
+                i2cbus.write_byte_data(self.GPIOADDR1, 0x12, 0xFF)
+                i2cbus.write_byte_data(self.GPIOADDR1, 0x13, 0xFF)
+                # i2cbus.write_byte_data(self.GPIOADDR2, 0x12, 0xFF)
+                # i2cbus.write_byte_data(self.GPIOADDR2, 0x13, 0xFF)
                 i2cbus.close()
                 self.i2c_semaphor.release()
             except Exception as e:

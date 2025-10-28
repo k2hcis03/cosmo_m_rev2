@@ -190,3 +190,7 @@
 3) WEIGHT_VALVE 명령어 구현
 4) 로그 파일 저장하는 곳을 한 곳으로 수정
   command = command_queue.get()
+
+
+2025-09-24
+1) REV0.99

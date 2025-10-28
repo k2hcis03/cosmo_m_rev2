@@ -1,6 +1,6 @@
 # CSV files
 *.csv
-
+*.log
 # Python cache files
 __pycache__/
 *.pyc
@@ -8,8 +8,16 @@ __pycache__/
 *.pyd
 .Python
 
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
 # Log files
 *.log
+log/
 
 # IDE files
 .vscode/
