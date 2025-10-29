@@ -29,7 +29,7 @@ OFF = 0
                    
 class UnitBoardTempControl(threading.Thread):
     def __init__(self, id, event, logging, can_fd_transmitte_queue, 
-                 command_queue, shared_memory, unit_semaphor, config, shared_memory_size):
+                 command_queue, shared_memory, unit_semaphor, config, shared_memory_size, dir_name):
         threading.Thread.__init__(self)
         self.daemon = True
         self.id = id                            # id는 0부터 시작
@@ -45,12 +45,12 @@ class UnitBoardTempControl(threading.Thread):
 
         self.shared_memory_u = shared_memory
         self.shared_memory_size = shared_memory_size
-        self.time_to_on = 0                 # Valve 릴레이가 ON되는 시간 변수
+        self.cold_valve_on_time = 0                 # Valve 릴레이가 ON되는 시간 변수
         self.pid_timer_call_time = 0        # pid or timer 계산 시간 5초. 0.1초 단위이므로 50
         self.unit_semaphor = unit_semaphor
         
         self.config = config
-        
+        self.dir_name = dir_name
         self.check_time = 0
         self.cold_valve_status = 0
         self.temp_control_start = False
@@ -64,10 +64,11 @@ class UnitBoardTempControl(threading.Thread):
         self.file_write = False             # CSV 파일을 새로 만들지 결정
         self.file_write_state = None        # CSV 파일 저장 조건 상태
         self.file_index = 0                 # CSV 파일 만들때 파일 번호
-        self.timer_control_valve = False    # 타이머로 제어 할 때, 시간 마다 한 번만 제어 하기위한 변수
+        self.cold_valve_control_timer = False    # 타이머로 제어 할 때, 시간 마다 한 번만 제어 하기위한 변수
         self.motor_rpm = 0                  # 모터 현재 속도
-        self.dir_name = None                # data 기록 디렉토리 생성 initial 상태에서 업데이트 됨
-    
+        self.ref_continue = False          # 기존 reference 데이터를 사용할지 새로운 reference 데이터를 사용할지 결정
+        self.ref_index = 0                  # reference 데이터 인덱스
+        self.ref_file_name = None           # reference 데이터 파일 이름
     def set_cold_valve(self, value):
         self.cold_valve_status = value
         x = self.config["SOLVALVE2"]        #냉각수 밸브 I/O 번호
@@ -77,10 +78,10 @@ class UnitBoardTempControl(threading.Thread):
                     "VALUE" : value}
         self.command_queue.put(message, block=False) 
     
-    def pid_task(self):    
+    def pid_task(self):   # ref온도가 현재 온도보다 높으면 아래기능 수행 
         if self.pid_timer_call_time > 0 and self.temp_control_start:            
-            if self.time_to_on:
-                self.time_to_on -= 1
+            if self.cold_valve_on_time:
+                self.cold_valve_on_time -= 1
                 if self.cold_valve_status == 0:
                     self.set_cold_valve(ON)
             else:
@@ -92,10 +93,10 @@ class UnitBoardTempControl(threading.Thread):
             Timer(0.1, self.pid_task).cancel()
             self.pid_timer_event.set()
             
-    def timer_task(self):    
+    def timer_task(self):    # ref온도가 현재 온도보다 높으면 아래기능 수행
         if self.pid_timer_call_time > 0 and self.temp_control_start:            
-            if self.time_to_on > 0 and self.timer_control_valve:
-                self.time_to_on -= 1
+            if self.cold_valve_on_time > 0 and self.cold_valve_control_timer:        # self.time_to_on시간 동안 valve를 ON 시킴 모터 속도가 100이하 또는 cold valve가 0일 때만 모터 명령어 전송
+                self.cold_valve_on_time -= 1
                 if self.cold_valve_status == 0:
                     self.set_cold_valve(ON)
                     # 온도 제어할 때, 모터가 100rpm보다 느린상태라면 구동 시킴
@@ -114,7 +115,7 @@ class UnitBoardTempControl(threading.Thread):
             else:
                 if self.cold_valve_status == 1:
                     self.set_cold_valve(OFF) 
-                    self.timer_control_valve = False
+                    self.cold_valve_control_timer = False
             self.pid_timer_call_time -= 1
             Timer(1, self.timer_task).start()
         else:
@@ -123,16 +124,53 @@ class UnitBoardTempControl(threading.Thread):
             if self.cold_valve_status == 1:
                 self.set_cold_valve(OFF) 
             # 한시간 마다 온도를 측정해서 냉각수를 구동시키기 때문에 위 if 문이 참이 아니면 다음 한시간을 기다리기 위해 아래
-            # self.timer_control_valve = False를 수행함
-            self.timer_control_valve = False
+            # self.cold_valve_control_timer = False를 수행함
+            self.cold_valve_control_timer = False
             self.pid_timer_event.set()
               
     def run(self):
             self.logging.info(f'id : {self.id} UnitBoard Temp Control Thread Run')
             while True:
                 try:
-                    self.event.wait()
-                    self.event.clear()
+                    try:
+                        self.ref_file_name = self.dir_name+'/ref.json'
+                        if os.path.exists(self.ref_file_name):
+                            self.logging.info(f"{ref_file_name} file is exist 기존 refernce로 진행합니다.")
+                            self.ref_continue = True
+                            try:
+                                with open(self.ref_file_name, 'r', encoding='utf-8') as f:
+                                    self.ref_datas = json.load(f, ensure_ascii=False, indent=4)
+                                
+                                self.logging.info(f'id : {self.id} ref_datas을 읽어왔습니다.')
+                                self.ref_stage = int(self.ref_datas['STAGE'])
+                                self.ref_step = int(self.ref_datas['STEP'])
+                                self.ref_data = self.ref_datas['DATA']
+                                self.ref_total = len(self.ref_data)
+
+                                self.temp_control_start = True
+                                self.file_write_state = True
+                                self.file_index  = 1
+                                self.file_write = False
+                            except Exception as e:
+                                self.logging.error(f'id : {id} 기존 ref_datas 읽어오는 중 오류 발생: {e}')
+                        else:
+                            self.logging.info(f"{self.ref_file_name} file is not exist 새로운 refernce로 진행합니다.")
+                            self.ref_continue = False
+                    except Exception as e:
+                        self.logging.error(f"ref.json 파일 삭제 중 오류 발생: {e}")
+                    
+                    if self.ref_continue:           #event 기다림 없이 그냥 진행행
+                        ref_file_index = self.dir_name+'/ref.index'
+                        try:
+                            with open(ref_file_index, 'r', encoding='utf-8') as f:
+                                self.ref_index = int(f.read())
+                            self.logging.info(f"ref.index 파일을 읽어왔습니다. {self.ref_index}")
+                        except Exception as e:
+                            self.logging.error(f"ref.index 파일 읽기 중 오류 발생: {e}")
+                    else:
+                        self.ref_index = 0
+                        self.event.wait()
+                        self.event.clear()
                     # self.pid.reset() 테스트 필요
                     ##############################################################################################################
                     ## 온도 관련 동작
@@ -153,7 +191,14 @@ class UnitBoardTempControl(threading.Thread):
                         except Exception as e:
                             print(e)
                     ##############################################################################################################
-                    for x in range(self.ref_total):
+                    for x in range(self.ref_index, self.ref_total):
+                        ref_file_index = self.dir_name+'/ref.index'       
+                        try:
+                            with open(ref_file_index, 'w', encoding='utf-8') as f:
+                                f.write(str(x))
+                        except Exception as e:
+                            self.logging.error(f"ref.index 파일 저장 중 오류 발생: {e}")
+
                         if self.temp_control_start:
                             time_start = time.time()
                             ref_temp = float(self.ref_data[x]["TEMP"])
@@ -176,7 +221,7 @@ class UnitBoardTempControl(threading.Thread):
                             self.command_queue.put(message, block=False) 
                             # self.logging.info(f"{message['CMD']} command is inserted Unit Board")
                             # self.logging.info(f'id : {self.id} UnitBoard Temp Control Thread {x} Step Start at {time_start} Time')
-                            self.timer_control_valve = True     # ref_step마다 한번씩 ON 해준다.
+                            self.cold_valve_control_timer = True     # ref_step마다 한번씩 ON 해준다.
                             
                             while (time_start + self.ref_step) > time.time():
                                 if self.temp_control_start:
@@ -203,35 +248,35 @@ class UnitBoardTempControl(threading.Thread):
                                     gpio5 = (self.shared_memory_u[0x07 + self.id*self.shared_memory_size]) & 0xFF
                                     
                                     if self.file_write_state:                               #STATE가 Run이면 True Pause면 False
-                                        self.writer.writerow([time.time(), ref_temp, current_temp2, self.time_to_on, current_ext_temp1, current_ext_humi1, 
+                                        self.writer.writerow([time.time(), ref_temp, current_temp2, self.cold_valve_on_time, current_ext_temp1, current_ext_humi1, 
                                                               current_ext_temp2, current_ext_humi2, gpio1, gpio2, gpio3, gpio4, gpio5, self.motor_rpm, 
                                                               analog1, analog3, analog4, analog5, analog6])
-                                        print(f'id: {self.id} period: {time.time()} time to on: {self.time_to_on} C.T: {current_temp2:0.2F} and F.T: {ref_temp}')
+                                        print(f'id: {self.id} period: {time.time()} time to on: {self.cold_valve_on_time} C.T: {current_temp2:0.2F} and F.T: {ref_temp}')
                                         
                                         # print(f'id: {self.id} analog1: {analog1} analog3: {analog3} analog4: {analog4} analog5: {analog5} and analog6: {analog6}')
                                         # print(f'id: {self.id} gpio1: {gpio1} gpio2: {gpio2} gpio3: {gpio3} gpio4: {gpio4} and gpio5: {gpio5}') 
                                         
                                     if self.config["TEMP_CONTROL"] == 'PID':
                                         inc = self.pid(current_temp2)
-                                        self.time_to_on = round(inc)                        #소수점 첫번째에서 반올림
+                                        self.cold_valve_on_time = round(inc)                        #소수점 첫번째에서 반올림
                                         self.pid_timer_call_time = 49                       #타이머 호출 회수 -1
                                         pid_t = Timer(0.1, self.pid_task).start()           #0.1초 타이머
                                     elif self.config["TEMP_CONTROL"] == 'TIMER':
                                         if ref_temp < current_temp2:
-                                            self.time_to_on = int(self.config["TEMP_CONTROL_TIME"]) 
+                                            self.cold_valve_on_time = int(self.config["TEMP_CONTROL_TIME"]) 
                                         else:
-                                            self.time_to_on = 0
+                                            self.cold_valve_on_time = 0
                                         self.pid_timer_call_time = 9  
                                         timer_t = Timer(1, self.timer_task).start()         #1초 타이머
                                         
-                                    self.pid_timer_event.wait()                             #0.1초 또는 1초 타이머가 50번 또는 7 호출되는것을 기다림
+                                    self.pid_timer_event.wait()                             #0.1초 또는 1초 타이머가 50번 또는 10 호출되는것을 기다림
                                     self.pid_timer_event.clear()
                                 else:
                                     if self.writer_csv.closed:
                                         self.writer_csv.close()
                                     break
                         else:
-                            self.timer_control_valve = False
+                            self.cold_valve_control_timer = False
                             if self.pid_timer_call_time > 0:
                                 self.pid_timer_call_time = 0
                             #################################################
@@ -247,6 +292,15 @@ class UnitBoardTempControl(threading.Thread):
                             break
                     if not self.writer_csv.closed:
                         self.writer_csv.close()
+                    
+                    ref_file_name = self.dir_name+'/ref.json'       #시컨스가 끝나면 ref.json 파일을 삭제
+                    try:
+                        if os.path.exists(ref_file_name):
+                            os.remove(ref_file_name)
+                            self.logging.info(f"{ref_file_name} file is removed")
+                    except Exception as e:
+                        self.logging.error(f"ref.json 파일 삭제 중 오류 발생: {e}")
+                    
                     self.pid.reset()            #pause 또는 stop이 오면 pid reset후 처음부터 다시 시작
                     self.set_cold_valve(OFF)    #pause 또는 stop이 오면 냉각 밸브를 off 시킴
                     ##############################################################################################################
@@ -263,7 +317,7 @@ class UnitBoard:
         self.GPIOADDR2 = GPIOADDR2
         self.i2c_semaphor = i2c_semaphor
         # self.pid_update()
-    
+        self.dir_name = None                # data 기록 디렉토리 생성 ref data 저장 디렉토리
     # data 리스트에 있는 값들에 대해 CRC16 계산 후 data에 추가
     def crc16(self, data: list):
         crc = 0xFFFF
@@ -287,6 +341,8 @@ class UnitBoard:
         event = threading.Event()
         old_status = "None"
         old_stage = 1000
+        self.dir_name = f"/home/pi/Projects/cosmo-m/ref/unit_board{id}"                # data 기록 디렉토리 생성 ref data 저장 디렉토리
+       
         try:
             self.config_file = configparser.ConfigParser()  ## 클래스 객체 생성
             self.config_file.read('/home/pi/Projects/cosmo-m/config/config.ini')  ## 파일 읽기        
@@ -300,7 +356,7 @@ class UnitBoard:
         # 온도조절 관련 쓰레드 생성 ##################################################
         temp_thread = UnitBoardTempControl(id, event, logging, self.can_fd_transmitte_queue, 
                                                            command_queue, 
-                                                           shared_memory_u, unit_semaphor, self.config, self.shared_memory_size)
+                                                           shared_memory_u, unit_semaphor, self.config, self.shared_memory_size, self.dir_name)
         temp_thread.start()
         ######################################################################################################################################################
         # 처음 부팅이 되면 환경 설정을 유닛보드로 전송 ################################
@@ -387,6 +443,17 @@ class UnitBoard:
                     if command['CMD'] == 'REF':
                         if int(self.config['TANK_ID']) == int(command['TANK_ID']) and int(self.config['ADDRESS'], 16) != 0xFFF:
                             temp_thread.ref_datas.append(command)
+                            if not os.path.isdir(self.dir_name):    
+                                os.mkdir(self.dir_name)
+                            # temp_thread.ref_datas를 ref.json으로 저장합니다.
+                            try:
+                                ref_json_path = os.path.join(self.dir_name, 'ref.json')
+                                with open(ref_json_path, 'w', encoding='utf-8') as f:
+                                    json.dump(temp_thread.ref_datas, f, ensure_ascii=False, indent=4)
+                                logging.info(f'id : {id} ref_datas가 {ref_json_path}에 저장되었습니다.')
+                            except Exception as e:
+                                logging.error(f'id : {id} ref_datas를 ref.json으로 저장하는 중 오류 발생: {e}')
+                            
                     elif command['CMD'] == 'STATE':
                         if int(self.config['TANK_ID']) == int(command['DATA'][id]['TANK_ID']) and int(self.config['ADDRESS'], 16) != 0xFFF:
                             if command['DATA'][id]['STATUS'] == 'None':
@@ -410,7 +477,7 @@ class UnitBoard:
                                     temp_thread.temp_control_start = True
                                     temp_thread.file_write = True
                                     temp_thread.file_write_state = True
-                                    temp_thread.file_index += 1
+                                    temp_thread.file_index  += 1
                                     event.set()
                                 shared_memory_u[0x18 + id*self.shared_memory_size] = int(command['DATA'][id]['STAGE']) << 16 | 0
                                 status = 2
