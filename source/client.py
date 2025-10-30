@@ -13,6 +13,7 @@ from multiprocessing import shared_memory
 import traceback
 import configparser
 from signal import signal, SIGPIPE, SIG_DFL
+from constdefine import ConstDefine
 # signal(SIGPIPE,SIG_DFL)
 
 class UnitBoardGetStatus(threading.Thread):
@@ -84,17 +85,34 @@ class UnitBoardGetStatus(threading.Thread):
                 "STATE":[],
                 # "CODE":{"CODE":1000,"MSG":"OK"}
             }
-            temp_index = [0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12]           #온도 값이 저장되는 shared_memory 위치 
-            humi_index = [0x13, 0x15]                       #습도 값이 저장되는 shared_memory 위치
-            co2_index = [0x26, 0x26]                        #Co2 값이 저장되는 shared_memory 위치
-            ph_index = [0x28, 0x28]                         #PH 값이 저장되는 shared_memory 위치
-            brix_index = [0x25, 0x25]                       #Brix 값이 저장되는 shared_memory 위치
-            flow_index = [0x27, 0x27]                       #Flow 값이 저장되는 shared_memory 위치
-            loadcell_index = [0x24, 0x24]                   #Load Cell 값이 저장되는 shared_memory 위치
-            gpo_index = [0x1A, 0x1A]                        #gpo 값이 저장되는 shared_memory 위치
-            gpi_index = [0x1c, 0x1c]                        #gpi 값이 저장되는 shared_memory 위치
-            inverter_index = [0x1E, 0x1E]                   #inverter 값이 저장되는 shared_memory 위치
-            motor_index = [0x23, 0x23]                      #motor 값이 저장되는 shared_memory 위치
+            temp_index = [ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP1, 
+                          ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP2,
+                          ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP3,
+                          ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP4,
+                          ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP5,
+                          ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP6,
+                          ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP7,
+                          ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP8]           #온도 값이 저장되는 shared_memory 위치 
+            humi_index = [0x13, 
+                        0x15]                       #습도 값이 저장되는 shared_memory 위치
+            co2_index = [ConstDefine.SHARED_MEMORY_OFFSET_CO2, 
+                         ConstDefine.SHARED_MEMORY_OFFSET_CO2]                        #Co2 값이 저장되는 shared_memory 위치
+            ph_index = [ConstDefine.SHARED_MEMORY_OFFSET_PH, 
+                        ConstDefine.SHARED_MEMORY_OFFSET_PH]                         #PH 값이 저장되는 shared_memory 위치
+            brix_index = [ConstDefine.SHARED_MEMORY_OFFSET_BRIX, 
+                          ConstDefine.SHARED_MEMORY_OFFSET_BRIX]                       #Brix 값이 저장되는 shared_memory 위치
+            flow_index = [ConstDefine.SHARED_MEMORY_OFFSET_FLOWER, 
+                          ConstDefine.SHARED_MEMORY_OFFSET_FLOWER]                       #Flow 값이 저장되는 shared_memory 위치
+            loadcell_index = [ConstDefine.SHARED_MEMORY_OFFSET_LOAD_CELL, 
+                              ConstDefine.SHARED_MEMORY_OFFSET_LOAD_CELL]                   #Load Cell 값이 저장되는 shared_memory 위치
+            gpo_index = [ConstDefine.SHARED_MEMORY_OFFSET_GPO0_7, 
+                         ConstDefine.SHARED_MEMORY_OFFSET_GPO0_7]                        #gpo 값이 저장되는 shared_memory 위치
+            gpi_index = [ConstDefine.SHARED_MEMORY_OFFSET_GPI0_7, 
+                         ConstDefine.SHARED_MEMORY_OFFSET_GPI0_7]                        #gpi 값이 저장되는 shared_memory 위치
+            inverter_index = [ConstDefine.SHARED_MEMORY_OFFSET_INVERTER_STATUS, 
+                              ConstDefine.SHARED_MEMORY_OFFSET_INVERTER_STATUS]                   #inverter 값이 저장되는 shared_memory 위치
+            motor_index = [ConstDefine.SHARED_MEMORY_OFFSET_RPM, 
+                           ConstDefine.SHARED_MEMORY_OFFSET_RPM]                      #motor 값이 저장되는 shared_memory 위치
             # vavle_index = [1, 0]
             self.order += 1
                                 
