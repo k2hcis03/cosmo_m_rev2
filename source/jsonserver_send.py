@@ -31,7 +31,7 @@ class SingleTCPHandler(socketserver.BaseRequestHandler):
         index = 0
         while True:
             try:
-                NUM = int(input("\n 1=MOTOR, 2=SET GPIO, 3=GET_ADC, 4=GET_STATUS, 5 = START_TEMP 6 = STOP_TEMP: 7=TEMP_RPM: 8=RESET GPIO "))
+                NUM = int(input("\n 1=MOTOR, 2=SET GPIO, 3=GET_ADC, 4=GET_STATUS, 5 = START_TEMP 6 = STOP_TEMP: 7=TEMP_RPM: 8=RESET GPIO 9=FIRMWARE_UPDATE: "))
                 index += 1
                 # print(NUM)
                 if NUM == 1:
@@ -95,12 +95,18 @@ class SingleTCPHandler(socketserver.BaseRequestHandler):
                                                     "SEND" : True,
                                                     "TIMEOUT" : 28800}), 'UTF-8'))   
                 elif NUM == 8:
-                    self.request.send(bytes(json.dumps({"UNIT_ID" : 0,
+                    self.request.send(bytes(json.dumps({"UNIT_ID" : 1,
                                                     "IDX" : index,
                                                     "CMD":"SET_GPIO",
                                                     "NUM" : [0, 1, 2, 3, 4], 
                                                     "SEND" : True,
                                                     "VALUE" : [False, False, False, False, False]}), 'UTF-8'))
+                elif NUM == 9:
+                    self.request.send(bytes(json.dumps({"UNIT_ID" : 1,
+                                                    "IDX" : index,
+                                                    "CMD":"FIRMWARE_UPDATE",
+                                                    "FILE" : "/home/pi/Projects/cosmo-m/firmware/firmware.bin", 
+                                                    "SEND" : True}), 'UTF-8'))
                 else:
                     print("잘못된 선택입니다.")
                 # time.sleep(1)

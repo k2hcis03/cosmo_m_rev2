@@ -1,5 +1,6 @@
 #! /usr/bin/python3
 
+from typing import Any
 import smbus
 import os
 import can
@@ -18,6 +19,7 @@ import configparser
 import traceback
 import datetime
 from constdefine import ConstDefine
+import queue
 
 setpoint = 15.0  # Target temperature
 Kp = 1.0  # Proportional gain
@@ -136,7 +138,7 @@ class UnitBoardTempControl(threading.Thread):
                     try:
                         self.ref_file_name = self.dir_name+'/ref.json'
                         if os.path.exists(self.ref_file_name):
-                            self.logging.info(f"{ref_file_name} file is exist 기존 refernce로 진행합니다.")
+                            self.logging.info(f"{self.ref_file_name} file is exist 기존 refernce로 진행합니다.")
                             self.ref_continue = True
                             try:
                                 with open(self.ref_file_name, 'r', encoding='utf-8') as f:
@@ -317,54 +319,17 @@ class UnitBoardTempControl(threading.Thread):
                     print(e)
 
 class UnitBoard:
-    def __init__(self, transmitte_queue, socket_send_queue, GPIOADDR1, GPIOADDR2, i2c_semaphor) -> None:
+    def __init__(self, transmitte_queue, socket_send_queue, GPIOADDR1, GPIOADDR2, i2c_semaphor, status_control_queue) -> None:
         self.can_fd_transmitte_queue = transmitte_queue
         self.socket_send_queue = socket_send_queue
         self.GPIOADDR1 = GPIOADDR1
         self.GPIOADDR2 = GPIOADDR2
         self.i2c_semaphor = i2c_semaphor
+        self.status_control_queue = status_control_queue
         # self.pid_update()
         self.dir_name = None                # data 기록 디렉토리 생성 ref data 저장 디렉토리
-    # data 리스트에 있는 값들에 대해 CRC16 계산 후 data에 추가
-    def crc16(self, data: list):
-        crc = 0xFFFF
-        for d in data:
-            crc ^= d
-            for _ in range(8):
-                if crc & 1:
-                    crc = (crc >> 1) ^ 0xA001
-                else:
-                    crc >>= 1
-        return crc
-
-    def unit_process(self, n, shm, arr, semaphor, receive_queue, cmd_queue, logging):
-        new_shm = shared_memory.SharedMemory(name=shm)
-        shared_memory_u = np.ndarray(arr.shape, dtype=arr.dtype, buffer=new_shm.buf)
-        logging.info(f'Process {os.getpid()} and {n} are created')  
-        id = n
-        unit_semaphor = semaphor
-        can_fd_receive_queue = receive_queue
-        command_queue = cmd_queue
-        event = threading.Event()
-        old_status = "None"
-        old_stage = 1000
-        self.dir_name = f"/home/pi/Projects/cosmo-m/ref/unit_board{id}"                # data 기록 디렉토리 생성 ref data 저장 디렉토리
-       
-        try:
-            self.config_file = configparser.ConfigParser()  ## 클래스 객체 생성
-            self.config_file.read('/home/pi/Projects/cosmo-m/config/config.ini')  ## 파일 읽기        
-            common_config = self.config_file['common']
-            self.shared_memory_size = int(common_config['SHARED_MEMORY_SIZE'])
-            self.config = self.config_file[f'unit_board{id}']
-        except Exception as e:
-            logging.error(f'id : {id} config.ini file open error')
-            print(e)
-        shared_memory_u[id * self.shared_memory_size] = os.getpid()   # id는 shared memory에 첫 번째 데이터  
-        # 온도조절 관련 쓰레드 생성 ##################################################
-        temp_thread = UnitBoardTempControl(id, event, logging, self.can_fd_transmitte_queue, 
-                                                           command_queue, 
-                                                           shared_memory_u, unit_semaphor, self.config, self.shared_memory_size, self.dir_name)
-        temp_thread.start()
+    
+    def unit_board_initialize(self, id, can_fd_receive_queue, logging):
         ######################################################################################################################################################
         # 처음 부팅이 되면 환경 설정을 유닛보드로 전송 ################################
         # SET_CONFIG 명령어 수행
@@ -419,6 +384,47 @@ class UnitBoard:
         else:
             logging.warning(f'id : {id} unit board is not response')    
         ######################################################################################################################################################                        
+    # data 리스트에 있는 값들에 대해 CRC16 계산 후 data에 추가
+    def crc16(self, data: list):
+        crc = 0xFFFF
+        for d in data:
+            crc ^= d
+            for _ in range(8):
+                if crc & 1:
+                    crc = (crc >> 1) ^ 0xA001
+                else:
+                    crc >>= 1
+        return crc
+    
+    def unit_process(self, n, shm, arr, semaphor, receive_queue, cmd_queue, logging):
+        new_shm = shared_memory.SharedMemory(name=shm)
+        shared_memory_u = np.ndarray(arr.shape, dtype=arr.dtype, buffer=new_shm.buf)
+        logging.info(f'Process {os.getpid()} and {n} are created')  
+        id = n
+        unit_semaphor = semaphor
+        can_fd_receive_queue = receive_queue
+        command_queue = cmd_queue
+        event = threading.Event()
+        old_status = "None"
+        old_stage = 1000
+        self.dir_name = f"/home/pi/Projects/cosmo-m/ref/unit_board{id}"                # data 기록 디렉토리 생성 ref data 저장 디렉토리
+       
+        try:
+            self.config_file = configparser.ConfigParser()  ## 클래스 객체 생성
+            self.config_file.read('/home/pi/Projects/cosmo-m/config/config.ini')  ## 파일 읽기        
+            common_config = self.config_file['common']
+            self.shared_memory_size = int(common_config['SHARED_MEMORY_SIZE'])
+            self.config = self.config_file[f'unit_board{id}']
+        except Exception as e:
+            logging.error(f'id : {id} config.ini file open error')
+            print(e)
+        shared_memory_u[id * self.shared_memory_size] = os.getpid()   # id는 shared memory에 첫 번째 데이터  
+        # 온도조절 관련 쓰레드 생성 ##################################################
+        temp_thread = UnitBoardTempControl(id, event, logging, self.can_fd_transmitte_queue, 
+                                                           command_queue, 
+                                                           shared_memory_u, unit_semaphor, self.config, self.shared_memory_size, self.dir_name)
+        temp_thread.start()
+        self.unit_board_initialize(id, can_fd_receive_queue, logging)
         while True:
             try: 
                 command = command_queue.get()
@@ -524,7 +530,7 @@ class UnitBoard:
                             
                             if command['DATA'][id]['STATUS'] == 'Run' and int(command['DATA'][id]['STAGE']) != old_stage:
                                 shared_memory_u[0x17 + id*self.shared_memory_size] = 0
-                            self.old_stage = int(command['DATA'][id]['STAGE'])   
+                            old_stage = int(command['DATA'][id]['STAGE'])
                     elif command['CMD'] == 'GET_ADC':
                         if int(self.config['ADDRESS'], base=16) != 0xFFF:
                             data = [0x03]
@@ -941,6 +947,104 @@ class UnitBoard:
                                         "TIME" : run_time,
                                         "SEND" : True}    
                                 command_queue.put(message, block=False)
+                    elif command['CMD'] == 'FIRMWARE_UPDATE':                      
+                        if int(self.config['ADDRESS'], base=16) != 0xFFF:
+                            if self.status_control_queue:
+                                try:
+                                    self.status_control_queue.put({"cmd": "PAUSE_TIMER", "unit_id": id}, timeout=1)
+                                except queue.Full:
+                                    logging.error(f'id : {id} status timer pause 큐가 가득 찼습니다.')
+                                except Exception as e:
+                                    logging.error(f'id : {id} status timer pause 요청 실패: {e}')
+                            try:
+                                data = [0xFE]
+                                file_temp = []
+                                is_last = False
+                                with open(command['FILE'], 'rb') as f:
+                                    while True:
+                                        chunk = f.read(1024)
+                                        if not chunk:
+                                            break
+                                        file_temp.extend(chunk)
+
+                                # INSERT_YOUR_CODE
+                                offset = 0
+                                index = 0
+                                while offset < len(file_temp):
+                                    chunk = file_temp[offset:offset+56]
+                                    if len(chunk) < 56:
+                                        is_last = 1
+                                    else:
+                                        is_last = 0               
+                                    
+                                    data.append((index >> 8) & 0xff)        # big endian
+                                    data.append(index & 0xff)     
+                                    data.append(len(chunk))
+                                    data.append(is_last)
+                                    data = data + list(chunk)
+                                    crc = self.crc16(data)
+                                    data.append(crc & 0xFF)
+                                    data.append((crc >> 8) & 0xFF)
+                                    message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = True,
+                                                data=bytearray(data))
+                                    # time.sleep(0.005)
+                                    offset += 56
+                                    print(f'index: {index}')
+                                    index += 1
+                                    
+                                    if is_last:
+                                        break
+                                    else:
+                                        data = [0xFE]
+                                        self.can_fd_transmitte_queue.put(message) 
+                                
+                                if not is_last:         # 펌웨어 데이터 개수가 56으로 나눠지면 에러 발생하므로 data[4] = 0 이면 마지막 데이터가 아니므로 1로 변경
+                                    data = [0xFE]
+                                    data.append((index >> 8) & 0xff)        # big endian
+                                    data.append(index & 0xff)     
+                                    data.append(len(chunk))
+                                    data.append(1)
+                                    data = data + list(chunk)
+                                    crc = self.crc16(data)
+                                    data.append(crc & 0xFF)
+                                    data.append((crc >> 8) & 0xFF)
+                                    message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = True,
+                                                data=bytearray(data))
+                                    
+                                while not can_fd_receive_queue.empty():
+                                    can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
+                    
+                                self.can_fd_transmitte_queue.put(message) 
+                                wait = 0
+                                while can_fd_receive_queue.empty():
+                                    time.sleep(0.01)
+                                    wait += 1
+                                    if wait > 120:
+                                        break
+                                if not can_fd_receive_queue.empty():
+                                    message = can_fd_receive_queue.get()
+                                    if message.data[0] == 0xFE:
+                                        logging.info(f'id : {id} Received message: {message}')
+                                        if command['SEND'] and self.socket_send_queue:
+                                            if message.data[1] == 1:
+                                                self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"success!"}), 'UTF-8'), block=False)
+                                            else:
+                                                self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'), block=False)
+                                    else:
+                                        logging.warning(f'id : {id} {command["CMD"]} unit board is wrong response') 
+                                else:
+                                    logging.warning(f'id : {id} {command["CMD"]} unit board is not response') 
+                                # logging.info(f'id : {id} UnitBoard execute {command["CMD"]}')
+                            finally:
+                                if self.status_control_queue:
+                                    try:
+                                        time.sleep(0.5)
+                                        self.unit_board_initialize(id, can_fd_receive_queue, logging)
+                                        self.status_control_queue.put({"cmd": "RESUME_TIMER", "unit_id": id}, timeout=1)
+                                    except queue.Full:
+                                        logging.error(f'id : {id} status timer resume 큐가 가득 찼습니다.')
+                                    except Exception as e:
+                                        logging.error(f'id : {id} status timer resume 요청 실패: {e}')
                 self.i2c_semaphor.acquire()
                 i2cbus.write_byte_data(self.GPIOADDR1, 0x12, 0xFF)
                 i2cbus.write_byte_data(self.GPIOADDR1, 0x13, 0xFF)

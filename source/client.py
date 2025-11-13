@@ -17,7 +17,7 @@ from constdefine import ConstDefine
 # signal(SIGPIPE,SIG_DFL)
 
 class UnitBoardGetStatus(threading.Thread):
-    def __init__(self, logging, tcp_queue, max_unit_board, shared_memory, socket_send_queue, receive_event):
+    def __init__(self, logging, tcp_queue, max_unit_board, shared_memory, socket_send_queue, receive_event, status_control_queue):
         threading.Thread.__init__(self)
         self.daemon = True
         self.logging = logging
@@ -32,6 +32,12 @@ class UnitBoardGetStatus(threading.Thread):
         self.timer_lock = threading.Lock()
         self.consecutive_errors = 0
         self.max_error_threshold = 5
+        self.status_control_queue = status_control_queue
+        self.pause_count = 0
+        self.control_thread = None
+        if self.status_control_queue is not None:
+            self.control_thread = threading.Thread(target=self.control_loop, daemon=True)
+            self.control_thread.start()
         
         # Config 파일 읽기 with 예외 처리
         self.config_file = configparser.ConfigParser()
@@ -66,6 +72,47 @@ class UnitBoardGetStatus(threading.Thread):
             self.send_data = {"CMD": "SENSOR", "ORDER": "0", "VALUES": [], "STATE": []}
         
         logging.info(f'UnitBoardGetStatus thread initialized') 
+        
+    def control_loop(self):
+        while True:
+            try:
+                message = self.status_control_queue.get()
+                if not message:
+                    continue
+                command = message.get('cmd')
+                unit_id = message.get('unit_id')
+                if command == 'PAUSE_TIMER':
+                    self.pause_status_timer(unit_id)
+                elif command == 'RESUME_TIMER':
+                    self.resume_status_timer(unit_id)
+            except Exception as e:
+                self.logging.error(f'Status timer control error: {e}')
+
+    def pause_status_timer(self, unit_id):
+        with self.timer_lock:
+            self.pause_count += 1
+            self.timer_active = False
+            if self.pause_count == 1:
+                self.logging.info(f'펌웨어 업데이트 진행으로 상태 전송 타이머를 일시 중지합니다. (unit:{unit_id})')
+            else:
+                self.logging.debug(f'펌웨어 업데이트 대기 중 타이머 일시 중지 유지. count={self.pause_count} (unit:{unit_id})')
+
+    def resume_status_timer(self, unit_id):
+        with self.timer_lock:
+            if self.pause_count == 0:
+                self.logging.debug(f'펌웨어 업데이트 종료 신호가 도착했지만 대기 중인 pause가 없습니다. (unit:{unit_id})')
+                if not self.timer_active:
+                    self.timer_active = True
+                    Timer(1, self.timer_upadate_task).start()
+                return
+            self.pause_count -= 1
+            if self.pause_count == 0:
+                if not self.timer_active:
+                    self.timer_active = True
+                    Timer(1, self.timer_upadate_task).start()
+                self.logging.info(f'펌웨어 업데이트가 완료되어 상태 전송 타이머를 재개합니다. (unit:{unit_id})')
+            else:
+                self.logging.debug(f'다른 펌웨어 업데이트가 진행 중이므로 타이머 재개를 대기합니다. 남은 count={self.pause_count} (unit:{unit_id})')
         
     def make_json_data(self):
         """JSON 데이터 생성 with 예외 처리"""
@@ -550,7 +597,7 @@ class UnitBoardGetStatus(threading.Thread):
                 
 class TcpClientThread(threading.Thread):
     def __init__(self, tcp_queue, logging, GPIOADDR1, GPIOADDR2, socket_event, 
-                 i2c_semaphor, MAXUNITBOARD, shm_name, unit_np_shm, socket_send_queue):
+                 i2c_semaphor, MAXUNITBOARD, shm_name, unit_np_shm, socket_send_queue, status_control_queue):
         threading.Thread.__init__(self)
         self.daemon = True
         self.logging = logging
@@ -564,6 +611,7 @@ class TcpClientThread(threading.Thread):
         self.unit_np_shm = unit_np_shm
         self.socket_send_queue = socket_send_queue
         self.socket_event = socket_event
+        self.status_control_queue = status_control_queue
         
         # 에러 카운터
         self.consecutive_errors = 0
@@ -653,7 +701,7 @@ class TcpClientThread(threading.Thread):
         receive_event = threading.Event()
         try:
             status_thread = UnitBoardGetStatus(self.logging, self.tcp_queue, self.max_unit_board, 
-                                              self.shared_memory, self.socket_send_queue, receive_event)
+                                              self.shared_memory, self.socket_send_queue, receive_event, self.status_control_queue)
             status_thread.start()
             self.logging.info('UnitBoardGetStatus thread started')
         except Exception as e:

@@ -172,6 +172,11 @@ class CosmoMain(threading.Thread):
                 
                 if not matching:
                     logging.info(f"Wrong Unit board id{message['TANK_ID']}")
+            elif message['CMD'] == 'FIRMWARE_UPDATE':
+                if message['UNIT_ID'] >= 0 and message['UNIT_ID'] <= MAXUNITBOARD:
+                    self.command_queue[message['UNIT_ID']].put(message, block=False)
+                else:
+                    logging.info(f"Wrong Unit board id{message['UNIT_ID']}")
                     
 def main():
     config_file = configparser.ConfigParser()  ## 클래스 객체 생성
@@ -198,6 +203,7 @@ def main():
     can_fd_transmitte.queue = manager.Queue(1024)
     can_fd_transmitte.start()
     socket_send_queue = manager.Queue(524288)
+    status_control_queue = manager.Queue(1024)
     
     for i in range(MAXUNITBOARD):
         can_fd_receive.receive_queue.append(manager.Queue(1024))
@@ -215,7 +221,7 @@ def main():
     
     socket_event = threading.Event()
     main_func.client = tcp_client(tcp_queue, logging, GPIOADDR1, GPIOADDR2, socket_event, i2c_semaphor, MAXUNITBOARD, 
-                                  shm.name, main_func.unit_np_shm, socket_send_queue)
+                                  shm.name, main_func.unit_np_shm, socket_send_queue, status_control_queue)
     main_func.client.start()                            #tcp client 시작
     unitboard.g_file_path = common_config['JSON_FILE']
     # print("Server is not Connected")
@@ -227,7 +233,7 @@ def main():
             socket_event.clear()
             print("Server is Connected")
             with ProcessPoolExecutor(max_workers=32) as executor:
-                unit_func = unit_board(can_fd_transmitte.queue, socket_send_queue, GPIOADDR1, GPIOADDR2, i2c_semaphor)
+                unit_func = unit_board(can_fd_transmitte.queue, socket_send_queue, GPIOADDR1, GPIOADDR2, i2c_semaphor, status_control_queue)
                 
                 furtures = {executor.submit(unit_func.unit_process, i, shm.name, main_func.unit_np_shm, 
                                             main_func.unit_semaphor, can_fd_receive.receive_queue[i],
