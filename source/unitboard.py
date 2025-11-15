@@ -357,6 +357,7 @@ class UnitBoard:
             data.append(int(self.config['RS485_3_USAGE']))
             data.append(int(self.config['RS485_4_USAGE']))
             data.append(int(self.config['RS232_1_USAGE']))
+            data.append(int(self.config['TEMP_NUM']))
             # message의 data는 bytes형이 아니라면, int들의 list로 처리
             crc = self.crc16(data)
             # CRC16 2byte를 Little Endian으로 배열 뒤에 추가
@@ -1013,7 +1014,7 @@ class UnitBoard:
                                     
                                 while not can_fd_receive_queue.empty():
                                     can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
-                    
+                                    
                                 self.can_fd_transmitte_queue.put(message) 
                                 wait = 0
                                 while can_fd_receive_queue.empty():
@@ -1028,8 +1029,10 @@ class UnitBoard:
                                         if command['SEND'] and self.socket_send_queue:
                                             if message.data[1] == 1:
                                                 self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"success!"}), 'UTF-8'), block=False)
+                                                logging.info(f'id : {id} Firmware update success!')
                                             else:
                                                 self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'), block=False)
+                                                logging.warning(f'id : {id} Firmware update fail!')
                                     else:
                                         logging.warning(f'id : {id} {command["CMD"]} unit board is wrong response') 
                                 else:
