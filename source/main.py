@@ -173,7 +173,7 @@ class CosmoMain(threading.Thread):
                 if not matching:
                     logging.info(f"Wrong Unit board id{message['TANK_ID']}")
             elif message['CMD'] == 'FIRMWARE_UPDATE':
-                if message['UNIT_ID'] >= 0 and message['UNIT_ID'] <= MAXUNITBOARD:
+                if message['UNIT_ID'] >= 0 and message['UNIT_ID'] < MAXUNITBOARD:       # 0 ~ MAXUNITBOARD-1
                     self.command_queue[message['UNIT_ID']].put(message, block=False)
                 else:
                     logging.info(f"Wrong Unit board id{message['UNIT_ID']}")
