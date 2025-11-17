@@ -90,10 +90,10 @@ class CosmoMain(threading.Thread):
         self.i2cbus.write_byte_data(GPIOADDR1, 0x12, 0xFF)
         self.i2cbus.write_byte_data(GPIOADDR1, 0x13, 0xFF)
         
-        # self.i2cbus.write_byte_data(GPIOADDR2, 0x00, 0x00)        # OUTPUT
-        # self.i2cbus.write_byte_data(GPIOADDR2, 0x01, 0x00)        # OUTPUT
-        # self.i2cbus.write_byte_data(GPIOADDR2, 0x12, 0xFF)
-        # self.i2cbus.write_byte_data(GPIOADDR2, 0x13, 0xFF)
+        self.i2cbus.write_byte_data(GPIOADDR2, 0x00, 0x00)        # OUTPUT
+        self.i2cbus.write_byte_data(GPIOADDR2, 0x01, 0x00)        # OUTPUT
+        self.i2cbus.write_byte_data(GPIOADDR2, 0x12, 0xFF)
+        self.i2cbus.write_byte_data(GPIOADDR2, 0x13, 0xFF)
         self.command_queue = []
         self.i2cbus.close()
         

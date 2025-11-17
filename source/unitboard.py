@@ -67,6 +67,7 @@ class UnitBoardTempControl(threading.Thread):
         self.file_write = False             # CSV 파일을 새로 만들지 결정
         self.file_write_state = None        # CSV 파일 저장 조건 상태
         self.file_index = 0                 # CSV 파일 만들때 파일 번호
+        self.writer_csv = None              # CSV 파일 핸들
         self.cold_valve_control_timer = False    # 타이머로 제어 할 때, 시간 마다 한 번만 제어 하기위한 변수
         self.motor_rpm = 0                  # 모터 현재 속도
         self.ref_continue = False          # 기존 reference 데이터를 사용할지 새로운 reference 데이터를 사용할지 결정
@@ -281,8 +282,9 @@ class UnitBoardTempControl(threading.Thread):
                                     self.pid_timer_event.wait()                             #0.1초 또는 1초 타이머가 50번 또는 10 호출되는것을 기다림
                                     self.pid_timer_event.clear()
                                 else:
-                                    if self.writer_csv.closed:
+                                    if self.writer_csv and not self.writer_csv.closed:
                                         self.writer_csv.close()
+                                        self.writer_csv = None
                                     break
                         else:
                             self.cold_valve_control_timer = False
@@ -299,8 +301,9 @@ class UnitBoardTempControl(threading.Thread):
                             #self.command_queue.put(message) 
                             #self.logging.info(f"{message['CMD']} command is inserted Unit Board")
                             break
-                    if not self.writer_csv.closed:
+                    if self.writer_csv and not self.writer_csv.closed:
                         self.writer_csv.close()
+                        self.writer_csv = None
                     
                     ref_file_name = self.dir_name+'/ref.json'       #시컨스가 끝나면 ref.json 파일을 삭제
                     try:
@@ -314,8 +317,9 @@ class UnitBoardTempControl(threading.Thread):
                     self.set_cold_valve(OFF)    #pause 또는 stop이 오면 냉각 밸브를 off 시킴
                     ##############################################################################################################
                 except Exception as e:
-                    if self.writer_csv.closed:
+                    if self.writer_csv and not self.writer_csv.closed:
                         self.writer_csv.close()
+                        self.writer_csv = None
                     print(e)
 
 class UnitBoard:
@@ -446,11 +450,33 @@ class UnitBoard:
                 
                 self.i2c_semaphor.acquire()
                 i2cbus = smbus.SMBus(1)
-                if int(command['UNIT_ID']) < 14:
-                    i2cbus.write_byte_data(self.GPIOADDR1, 0x12, 0xFF & (~(int(command['UNIT_ID']) + 1)))
-                else:
-                    i2cbus.write_byte_data(self.GPIOADDR1, 0x13, 0xFF & (~(int(command['UNIT_ID']) + 1)))
-                self.i2c_semaphor.release()
+                try:
+                    led = int(command['UNIT_ID'])
+                    i2cbus.write_byte_data(self.GPIOADDR1, 0x12, 0xFF)
+                    i2cbus.write_byte_data(self.GPIOADDR1, 0x13, 0xFF)
+                    i2cbus.write_byte_data(self.GPIOADDR2, 0x12, 0xFF)
+                    i2cbus.write_byte_data(self.GPIOADDR2, 0x13, 0xFF)
+                    if led < 8:
+                        led = led % 8
+                        led = 1 << led
+                        i2cbus.write_byte_data(self.GPIOADDR1, 0x12, 0xFF & (~led))
+                    elif led > 7 and led < 16:
+                        led = led % 8
+                        led = 1 << led
+                        i2cbus.write_byte_data(self.GPIOADDR1, 0x13, 0xFF & (~led))
+                    elif led > 15 and led < 24:
+                        led = led % 8
+                        led = 1 << led
+                        i2cbus.write_byte_data(self.GPIOADDR2, 0x12, 0xFF & (~led))
+                    elif led > 23 and led < 32:
+                        led = led % 8
+                        led = 1 << led
+                        i2cbus.write_byte_data(self.GPIOADDR2, 0x13, 0xFF & (~led))
+                except Exception as e:
+                    logging.error(f'id : {id} I2C write error: {e}')
+                finally:
+                    self.i2c_semaphor.release()
+                
                 if not command:
                     logging.warning(f'id : {id} Timeout waiting for command')
                 else: 
@@ -968,15 +994,24 @@ class UnitBoard:
                                             break
                                         file_temp.extend(chunk)
 
-                                # INSERT_YOUR_CODE
+                                if not file_temp:
+                                    logging.error(f'id : {id} 펌웨어 파일이 비어 있습니다. path={command["FILE"]}')
+                                    if command['SEND'] and self.socket_send_queue:
+                                        try:
+                                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'), block=False)
+                                        except queue.Full:
+                                            logging.error('socket_send_queue is full. 펌웨어 업데이트 실패 상태를 전송하지 못했습니다.')
+                                    continue
+
                                 offset = 0
                                 index = 0
+                                chunk = None
                                 while offset < len(file_temp):
                                     chunk = file_temp[offset:offset+56]
-                                    if len(chunk) < 56:
+                                    if len(chunk) < 56 or offset + 56 >= len(file_temp):
                                         is_last = 1
                                     else:
-                                        is_last = 0               
+                                        is_last = 0
                                     
                                     data.append((index >> 8) & 0xff)        # big endian
                                     data.append(index & 0xff)     
@@ -998,19 +1033,6 @@ class UnitBoard:
                                     else:
                                         data = [0xFE]
                                         self.can_fd_transmitte_queue.put(message) 
-                                
-                                if not is_last:         # 펌웨어 데이터 개수가 56으로 나눠지면 에러 발생하므로 data[4] = 0 이면 마지막 데이터가 아니므로 1로 변경
-                                    data = [0xFE]
-                                    data.append((index >> 8) & 0xff)        # big endian
-                                    data.append(index & 0xff)     
-                                    data.append(len(chunk))
-                                    data.append(1)
-                                    data = data + list(chunk)
-                                    crc = self.crc16(data)
-                                    data.append(crc & 0xFF)
-                                    data.append((crc >> 8) & 0xFF)
-                                    message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = True,
-                                                data=bytearray(data))
                                     
                                 while not can_fd_receive_queue.empty():
                                     can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
@@ -1051,8 +1073,8 @@ class UnitBoard:
                 self.i2c_semaphor.acquire()
                 i2cbus.write_byte_data(self.GPIOADDR1, 0x12, 0xFF)
                 i2cbus.write_byte_data(self.GPIOADDR1, 0x13, 0xFF)
-                # i2cbus.write_byte_data(self.GPIOADDR2, 0x12, 0xFF)
-                # i2cbus.write_byte_data(self.GPIOADDR2, 0x13, 0xFF)
+                i2cbus.write_byte_data(self.GPIOADDR2, 0x12, 0xFF)
+                i2cbus.write_byte_data(self.GPIOADDR2, 0x13, 0xFF)
                 i2cbus.close()
                 self.i2c_semaphor.release()
             except Exception as e:

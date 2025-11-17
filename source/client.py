@@ -603,7 +603,7 @@ class TcpClientThread(threading.Thread):
         self.logging = logging
         self.tcp_queue = tcp_queue
         self.GPIOADDR1 = GPIOADDR1
-        self.GPIOADDR2 =GPIOADDR2
+        self.GPIOADDR2 = GPIOADDR2
         self.i2c_semaphor = i2c_semaphor
         self.event = threading.Event()
         self.max_unit_board = MAXUNITBOARD
@@ -664,21 +664,21 @@ class TcpClientThread(threading.Thread):
             self.i2c_write_with_retry(self.GPIOADDR1, 0x12, 0xFF)
             self.i2c_write_with_retry(self.GPIOADDR1, 0x13, 0xFF)
 
-            # self.i2c_write_with_retry(self.GPIOADDR2, 0x12, 0xFF)
-            # self.i2c_write_with_retry(self.GPIOADDR2, 0x13, 0xFF)
+            self.i2c_write_with_retry(self.GPIOADDR2, 0x12, 0xFF)
+            self.i2c_write_with_retry(self.GPIOADDR2, 0x13, 0xFF)
         else:
             # LED OFF (blink)
             self.i2c_write_with_retry(self.GPIOADDR1, 0x12, 0xFF)
             self.i2c_write_with_retry(self.GPIOADDR1, 0x13, 0xFF)
 
-            # self.i2c_write_with_retry(self.GPIOADDR2, 0x12, 0xFF)
-            # self.i2c_write_with_retry(self.GPIOADDR2, 0x13, 0xFF)
+            self.i2c_write_with_retry(self.GPIOADDR2, 0x12, 0xFF)
+            self.i2c_write_with_retry(self.GPIOADDR2, 0x13, 0xFF)
             time.sleep(0.5)
             self.i2c_write_with_retry(self.GPIOADDR1, 0x12, 0x00)
             self.i2c_write_with_retry(self.GPIOADDR1, 0x13, 0x00)
 
-            # self.i2c_write_with_retry(self.GPIOADDR2, 0x12, 0x00)
-            # self.i2c_write_with_retry(self.GPIOADDR2, 0x13, 0x00)
+            self.i2c_write_with_retry(self.GPIOADDR2, 0x12, 0x00)
+            self.i2c_write_with_retry(self.GPIOADDR2, 0x13, 0x00)
     
     def run(self):
         """수신 스레드 메인 루프 with 예외 처리"""
