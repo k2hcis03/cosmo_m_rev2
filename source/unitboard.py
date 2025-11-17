@@ -73,6 +73,7 @@ class UnitBoardTempControl(threading.Thread):
         self.ref_continue = False          # 기존 reference 데이터를 사용할지 새로운 reference 데이터를 사용할지 결정
         self.ref_index = 0                  # reference 데이터 인덱스
         self.ref_file_name = None           # reference 데이터 파일 이름
+        
     def set_cold_valve(self, value):
         self.cold_valve_status = value
         x = self.config["SOLVALVE2"]        #냉각수 밸브 I/O 번호
@@ -451,27 +452,29 @@ class UnitBoard:
                 self.i2c_semaphor.acquire()
                 i2cbus = smbus.SMBus(1)
                 try:
-                    led = int(command['UNIT_ID'])
+                    led = int(command['UNIT_ID']) -1
                     i2cbus.write_byte_data(self.GPIOADDR1, 0x12, 0xFF)
                     i2cbus.write_byte_data(self.GPIOADDR1, 0x13, 0xFF)
                     i2cbus.write_byte_data(self.GPIOADDR2, 0x12, 0xFF)
                     i2cbus.write_byte_data(self.GPIOADDR2, 0x13, 0xFF)
-                    if led < 8:
-                        led = led % 8
-                        led = 1 << led
-                        i2cbus.write_byte_data(self.GPIOADDR1, 0x12, 0xFF & (~led))
-                    elif led > 7 and led < 16:
-                        led = led % 8
-                        led = 1 << led
-                        i2cbus.write_byte_data(self.GPIOADDR1, 0x13, 0xFF & (~led))
-                    elif led > 15 and led < 24:
-                        led = led % 8
-                        led = 1 << led
-                        i2cbus.write_byte_data(self.GPIOADDR2, 0x12, 0xFF & (~led))
-                    elif led > 23 and led < 32:
-                        led = led % 8
-                        led = 1 << led
-                        i2cbus.write_byte_data(self.GPIOADDR2, 0x13, 0xFF & (~led))
+                    
+                    if led >= 0:
+                        if led <= 7:
+                            led = led % 8
+                            led = 1 << led
+                            i2cbus.write_byte_data(self.GPIOADDR1, 0x12, 0xFF & (~led))
+                        elif led > 7 and led <= 15:
+                            led = led % 8
+                            led = 1 << led
+                            i2cbus.write_byte_data(self.GPIOADDR1, 0x13, 0xFF & (~led))
+                        elif led > 15 and led <= 23:
+                            led = led % 8
+                            led = 1 << led
+                            i2cbus.write_byte_data(self.GPIOADDR2, 0x12, 0xFF & (~led))
+                        elif led > 23 and led <= 31:
+                            led = led % 8
+                            led = 1 << led
+                            i2cbus.write_byte_data(self.GPIOADDR2, 0x13, 0xFF & (~led))
                 except Exception as e:
                     logging.error(f'id : {id} I2C write error: {e}')
                 finally:

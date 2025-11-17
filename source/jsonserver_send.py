@@ -32,10 +32,11 @@ class SingleTCPHandler(socketserver.BaseRequestHandler):
         while True:
             try:
                 NUM = int(input("\n 1=MOTOR, 2=SET GPIO, 3=GET_ADC, 4=GET_STATUS, 5 = START_TEMP 6 = STOP_TEMP: 7=TEMP_RPM: 8=RESET GPIO 9=FIRMWARE_UPDATE: "))
+                UNIT_ID = int(input("UNIT_ID를 입력하세요: "))
                 index += 1
                 # print(NUM)
                 if NUM == 1:
-                    self.request.send(bytes(json.dumps({"UNIT_ID" : 1, 
+                    self.request.send(bytes(json.dumps({"UNIT_ID" : UNIT_ID, 
                                         "IDX" : index,
                                         "TANK_ID" : "100",                 
                                         "CMD":"TEMP_RPM",
@@ -46,28 +47,28 @@ class SingleTCPHandler(socketserver.BaseRequestHandler):
                                         "SEND" : True}), 'UTF-8'))
                         
                 elif NUM == 2:
-                    self.request.send(bytes(json.dumps({"UNIT_ID" : 1,
+                    self.request.send(bytes(json.dumps({"UNIT_ID" : UNIT_ID,
                                                     "IDX" : index,
                                                     "TANK_ID" : "100",
                                                     "CMD":"SET_GPIO",
                                                     "SEND" : True,
                                                     "VALUE" : [True, False, False, False, True, False, False, False]}), 'UTF-8'))   #GPIO 0~7
                 elif NUM == 3:
-                    self.request.send(bytes(json.dumps({"UNIT_ID" : 1,
+                    self.request.send(bytes(json.dumps({"UNIT_ID" : UNIT_ID,
                                                     "IDX" : index,
                                                     "TANK_ID" : "100",
                                                     "CMD":"GET_ADC",
                                                     "SEND" : True,
                                                     "NUM" : [0, 1, 2, 3, 4, 5]}), 'UTF-8'))     
                 elif NUM == 4:
-                    self.request.send(bytes(json.dumps({"UNIT_ID" : 1,
+                    self.request.send(bytes(json.dumps({"UNIT_ID" : UNIT_ID,
                                                         "IDX" : index,
                                                         "TANK_ID" : "100",
                                                         "CMD":"GET_STATUS",
                                                         "SEND" : True, 
                                                         "RAW" : True}), 'UTF-8'))
                 elif NUM == 5:
-                    self.request.send(bytes(json.dumps({"UNIT_ID" : 0,
+                    self.request.send(bytes(json.dumps({"UNIT_ID" : UNIT_ID,
                                                     "IDX" : index,
                                                     "TANK_ID" : "100",
                                                     "CMD":"START_TEMP",  
@@ -76,7 +77,7 @@ class SingleTCPHandler(socketserver.BaseRequestHandler):
                                                     "TIMEOUT" : 28800}), 'UTF-8'))   #BOTH --> VALUE & motor, MOTOR --> motor, 
                                                                                     #VALVE --> valve, time --> sec
                 elif NUM == 6:
-                    self.request.send(bytes(json.dumps({"UNIT_ID" : 0,
+                    self.request.send(bytes(json.dumps({"UNIT_ID" : UNIT_ID,
                                                     "IDX" : index,
                                                     "TANK_ID" : "100",
                                                     "CMD":"STOP_TEMP",  
@@ -84,7 +85,7 @@ class SingleTCPHandler(socketserver.BaseRequestHandler):
                                                     "TIMEOUT" : 28800}), 'UTF-8'))   #BOTH --> VALUE & motor, MOTOR --> motor, 
                                                                                     #VALVE --> valve, time --> sec
                 elif NUM == 7:
-                    self.request.send(bytes(json.dumps({"UNIT_ID" : 1,
+                    self.request.send(bytes(json.dumps({"UNIT_ID" : UNIT_ID,
                                                     "IDX" : index,
                                                     "TANK_ID" : "100",
                                                     "CMD":"TEMP_RPM",
@@ -95,14 +96,14 @@ class SingleTCPHandler(socketserver.BaseRequestHandler):
                                                     "SEND" : True,
                                                     "TIMEOUT" : 28800}), 'UTF-8'))   
                 elif NUM == 8:
-                    self.request.send(bytes(json.dumps({"UNIT_ID" : 1,
+                    self.request.send(bytes(json.dumps({"UNIT_ID" : UNIT_ID,
                                                     "IDX" : index,
                                                     "CMD":"SET_GPIO",
                                                     "NUM" : [0, 1, 2, 3, 4], 
                                                     "SEND" : True,
                                                     "VALUE" : [False, False, False, False, False]}), 'UTF-8'))
                 elif NUM == 9:
-                    self.request.send(bytes(json.dumps({"UNIT_ID" : 1,
+                    self.request.send(bytes(json.dumps({"UNIT_ID" : UNIT_ID,
                                                     "IDX" : index,
                                                     "CMD":"FIRMWARE_UPDATE",
                                                     "FILE" : "/home/pi/Projects/cosmo-m/firmware/firmware.bin", 
