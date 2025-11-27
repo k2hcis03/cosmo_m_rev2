@@ -119,7 +119,7 @@ class CosmoMain(threading.Thread):
                 matching = False
                 for x in range(MAXUNITBOARD):
                     config = self.common_config[f'unit_board{x}']
-                    if message['TANK_ID'] == config['TANK_ID']:
+                    if message['TANK_ID'] == str(int(config['ADDRESS']) + 100):
                         message['UNIT_ID'] = str(int(message['TANK_ID']) - 100)
                         self.command_queue[x].put(message, block=False)
                         matching = True
@@ -164,7 +164,7 @@ class CosmoMain(threading.Thread):
                 matching = False
                 for x in range(MAXUNITBOARD):
                     config = self.common_config[f'unit_board{x}']
-                    if message['TANK_ID'] == config['TANK_ID']:
+                    if message['TANK_ID'] == str(int(config['ADDRESS']) + 100):
                         message['UNIT_ID'] = str(int(message['TANK_ID']) - 100)
                         self.command_queue[x].put(message, block=False)
                         matching = True

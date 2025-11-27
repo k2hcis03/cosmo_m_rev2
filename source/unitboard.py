@@ -484,7 +484,7 @@ class UnitBoard:
                     logging.warning(f'id : {id} Timeout waiting for command')
                 else: 
                     if command['CMD'] == 'REF':
-                        if int(self.config['TANK_ID']) == int(command['TANK_ID']) and int(self.config['ADDRESS'], 16) != 0xFFF:
+                        if int(self.config['TANK_ID']) == int(command['TANK_ID']) and int(self.config['ADDRESS']) != 999:
                             temp_thread.ref_datas.append(command)
                             if not os.path.isdir(self.dir_name):    
                                 os.mkdir(self.dir_name)
@@ -498,7 +498,7 @@ class UnitBoard:
                                 logging.error(f'id : {id} ref_datas를 ref.json으로 저장하는 중 오류 발생: {e}')
                             
                     elif command['CMD'] == 'STATE':
-                        if int(self.config['TANK_ID']) == int(command['DATA'][id]['TANK_ID']) and int(self.config['ADDRESS'], 16) != 0xFFF:
+                        if int(self.config['TANK_ID']) == int(command['DATA'][id]['TANK_ID']) and int(self.config['ADDRESS']) != 999:
                             if command['DATA'][id]['STATUS'] == 'None':
                                 temp_thread.temp_control_start = False
                                 shared_memory_u[0x18 + id*self.shared_memory_size] = int(command['DATA'][id]['STAGE']) << 16 | 0
@@ -562,7 +562,7 @@ class UnitBoard:
                                 shared_memory_u[0x17 + id*self.shared_memory_size] = 0
                             old_stage = int(command['DATA'][id]['STAGE'])
                     elif command['CMD'] == 'GET_ADC':
-                        if int(self.config['ADDRESS'], base=16) != 0xFFF:
+                        if int(self.config['ADDRESS']) != 999:
                             data = [0x03]
                             crc = self.crc16(data)
                             data.append(crc & 0xFF)
@@ -595,7 +595,7 @@ class UnitBoard:
                                     shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC7 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[13] << 8) | (np.int32)(message.data[14]))
                                     shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC8 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[15] << 8) | (np.int32)(message.data[16]))
                                     unit_semaphor.release()
-                                    if command['SEND'] and self.socket_send_queue:
+                                    if 'SEND' in command and command['SEND'] and self.socket_send_queue:
                                         self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"success!", 
                                                     "ADC1": f'{shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC1 + id*self.shared_memory_size] * 0.001}',
                                                     "ADC2": f'{shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC2 + id*self.shared_memory_size] * 0.001}',
@@ -611,7 +611,7 @@ class UnitBoard:
                                 logging.warning(f'id : {id} {command["CMD"]} unit board is not response') 
                             # logging.info(f'id : {id} UnitBoard execute {command["CMD"]}')
                     elif command['CMD'] == 'SET_GPIO':
-                        if int(self.config['ADDRESS'], base=16) != 0xFFF:
+                        if int(self.config['ADDRESS']) != 999:
                             data = [0x05]
                             value = 0
                             for i in range(len(command['VALUE'])):
@@ -638,7 +638,7 @@ class UnitBoard:
                                 message = can_fd_receive_queue.get()
                                 if message.data[0] == 0x05:
                                     logging.info(f'id : {id} Received message: {message}')
-                                    if command['SEND'] and self.socket_send_queue:
+                                    if 'SEND' in command and command['SEND'] and self.socket_send_queue:
                                         if message.data[1] == 1:
                                             self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"success!"}), 'UTF-8'), block=False)
                                         else:
@@ -649,7 +649,7 @@ class UnitBoard:
                                 logging.warning(f'id : {id} {command["CMD"]} unit board is not response') 
                             # logging.info(f'id : {id} UnitBoard execute {command["CMD"]}')
                     elif command['CMD'] == 'GET_STATUS':
-                        if int(self.config['ADDRESS'], base=16) != 0xFFF:
+                        if int(self.config['ADDRESS']) != 999:
                             # 온도계산 전에 GET_ADC를 호출 함. --> 명령어를 통합하여 ADC 값까지 GET_STATUS에서 읽어 옴.
                             data = [0x02]
                             crc = self.crc16(data)
@@ -673,7 +673,7 @@ class UnitBoard:
                                 message = can_fd_receive_queue.get()
                                 
                                 if message.data[0] == 0x02:
-                                    if command['SEND']:                      # 로고에 너무 많이 쌓이는 데이터 방지, 
+                                    if 'SEND' in command and command['SEND']:                      # 로고에 너무 많이 쌓이는 데이터 방지, 
                                         logging.info(f'id : {id} Received message: {message}')
                                         
                                     unit_semaphor.acquire()
@@ -778,7 +778,7 @@ class UnitBoard:
                                     # shared_memory_u[0x12 + id*self.shared_memory_size] = float(f'{(inclination3 * shared_memory_u[2 + id*self.shared_memory_size] - y_offset3) * 100 : 0.2F}')
                                     # shared_memory_u[0x13 + id*self.shared_memory_size] = float(f'{(inclination4 * shared_memory_u[3 + id*self.shared_memory_size] - y_offset4) * 100 : 0.2F}')
                                         
-                                    if command['SEND'] and self.socket_send_queue:  # SEND는 자체 jsonserver_send.py에서 처리하므로 여기서는 처리하지 않음.
+                                    if 'SEND' in command and command['SEND'] and self.socket_send_queue:  # SEND는 자체 jsonserver_send.py에서 처리하므로 여기서는 처리하지 않음.
                                         self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"success!", 
                                             "TEMP1" : f'{shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP1 + id*self.shared_memory_size] * 0.001: 0.2F}',
                                             "TEMP2" : f'{shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP2 + id*self.shared_memory_size] * 0.001: 0.2F}',
@@ -797,35 +797,35 @@ class UnitBoard:
                                 logging.warning(f'id : {id} {command["CMD"]} unit board is not response') 
                             # logging.info(f'id : {id} UnitBoard execute {command["CMD"]}')
                     elif command['CMD'] == 'START_TEMP':
-                        if int(self.config['ADDRESS'], base=16) != 0xFFF:
+                        if int(self.config['ADDRESS']) != 999:
                             event.set()
                             temp_thread.temp_control_start = True
                             
-                            if command['SEND'] and self.socket_send_queue:
+                            if 'SEND' in command and command['SEND'] and self.socket_send_queue:
                                 self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"success!"}), 'UTF-8'), block=False)
                             # logging.info(f'id : {id} UnitBoard execute {command["CMD"]}')
                     elif command['CMD'] == 'STOP_TEMP':
-                        if int(self.config['ADDRESS'], base=16) != 0xFFF:
+                        if int(self.config['ADDRESS']) != 999:
                             temp_thread.temp_control_start = False
                             
-                            if command['SEND'] and self.socket_send_queue:
+                            if 'SEND' in command and command['SEND'] and self.socket_send_queue:
                                 self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"success!"}), 'UTF-8'), block=False)
                             # logging.info(f'id : {id} UnitBoard execute {command["CMD"]}')
                     elif command['CMD'] == 'TEMP_RPM':
-                        if int(self.config['ADDRESS'], base=16) != 0xFFF:
+                        if int(self.config['ADDRESS']) != 999:
                             data = [0x07]
                             temp = int(command['SPEED'])
                             data.append((temp >> 8) & 0xff)        # big endian
                             data.append(temp & 0xff)               # big endian
                             
+                            temp = int(command['TIME']) 
+                            data.append((temp >> 8) & 0xff)        # big endian
+                            data.append(temp & 0xff)  
+
                             if command['DIR'] == 'FW':
-                                data.append(1)
-                            else:
                                 data.append(0)
-                            if command['ONOFF'] == 'ON':
-                                data.append(1)
                             else:
-                                data.append(0)
+                                data.append(1)
                                 
                             crc = self.crc16(data)
                             data.append(crc & 0xFF)
@@ -847,7 +847,7 @@ class UnitBoard:
                                 message = can_fd_receive_queue.get()
                                 if message.data[0] == 0x07:
                                     logging.info(f'id : {id} Received message: {message}')
-                                    if command['SEND'] and self.socket_send_queue:
+                                    if 'SEND' in command and command['SEND'] and self.socket_send_queue:
                                         if message.data[1] == 1:
                                             self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":f"success!"}), 'UTF-8'), block=False)
                                         else:
@@ -858,7 +858,7 @@ class UnitBoard:
                                 logging.warning(f'id : {id} {command["CMD"]} unit board is not response')   
                             # logging.info(f'id : {id} UnitBoard execute {command["CMD"]}')
                     elif command['CMD'] == 'TEMP_VALVE':
-                        if int(self.config['ADDRESS'], 16) != 0xFFF:
+                        if int(self.config['ADDRESS']) != 999:
                             data = [0x08]
                             data.append(int(command['CHANNEL']))
                             data.append(int(command['VALUE']))
@@ -884,7 +884,7 @@ class UnitBoard:
                                     logging.info(f'id : {id} Received message: {message}')
                                     # temp_thread.set_cold_valve(message.data[5])   # 지속적인 재전송을 원하면 주석 해제. 
                                     
-                                    if command['SEND'] and self.socket_send_queue:
+                                    if 'SEND' in command and command['SEND'] and self.socket_send_queue:
                                         if message.data[1] == 1:
                                             self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":f"success!"}), 'UTF-8'), block=False)
                                         else:
@@ -895,7 +895,7 @@ class UnitBoard:
                                 logging.warning(f'id : {id} {command["CMD"]} unit board is not response')  
                             # logging.info(f'id : {id} UnitBoard execute {command["CMD"]}')   
                     elif command['CMD'] == 'WEIGHT_VALVE':
-                        if int(self.config['ADDRESS'], base=16) != 0xFFF:
+                        if int(self.config['ADDRESS']) != 999:
                             data = [0x09]
                             data.append(int(command['CHANNEL']))
                             data.append(int(command['VALUE']))
@@ -934,7 +934,7 @@ class UnitBoard:
                             else:
                                 logging.warning(f'id : {id} {command["CMD"]} unit board is not response')   
                     elif command['CMD'] == 'CTRL':
-                        if int(self.config['TANK_ID']) == int(command['TANK_ID']) and int(self.config['ADDRESS'], 16) != 0xFFF:
+                        if int(self.config['TANK_ID']) == int(command['TANK_ID']) and int(self.config['ADDRESS']) != 999:
                             if command['CTRL'][0]['SENSOR_ID'] == '500':    #밸브는 4개 밸브 아이디는 500부터 시작 500-> 냉각
                                 x = self.config["SOLVALVE2"]                #밸브 I/O 번호
                                 if command['CTRL'][0]['PARAM0'] == 'ON':
@@ -978,7 +978,7 @@ class UnitBoard:
                                         "SEND" : True}    
                                 command_queue.put(message, block=False)
                     elif command['CMD'] == 'FIRMWARE_UPDATE':                      
-                        if int(self.config['ADDRESS'], base=16) != 0xFFF:
+                        if int(self.config['ADDRESS']) != 999:
                             if self.status_control_queue:
                                 try:
                                     self.status_control_queue.put({"cmd": "PAUSE_TIMER", "unit_id": id}, timeout=1)
@@ -999,7 +999,7 @@ class UnitBoard:
 
                                 if not file_temp:
                                     logging.error(f'id : {id} 펌웨어 파일이 비어 있습니다. path={command["FILE"]}')
-                                    if command['SEND'] and self.socket_send_queue:
+                                    if 'SEND' in command and command['SEND'] and self.socket_send_queue:
                                         try:
                                             self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'), block=False)
                                         except queue.Full:
@@ -1051,7 +1051,7 @@ class UnitBoard:
                                     message = can_fd_receive_queue.get()
                                     if message.data[0] == 0xFE:
                                         logging.info(f'id : {id} Received message: {message}')
-                                        if command['SEND'] and self.socket_send_queue:
+                                        if 'SEND' in command and command['SEND'] and self.socket_send_queue:
                                             if message.data[1] == 1:
                                                 self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"success!"}), 'UTF-8'), block=False)
                                                 logging.info(f'id : {id} Firmware update success!')

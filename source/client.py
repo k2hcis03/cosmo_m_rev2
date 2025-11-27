@@ -167,7 +167,7 @@ class UnitBoardGetStatus(threading.Thread):
                 try:
                     unit_config = self.config_file[f'unit_board{i}']
                     
-                    if int(unit_config.get('ADDRESS', 0),16) == 0xFFF:
+                    if int(unit_config.get('ADDRESS', 0)) == 999:
                         continue
                     # Shared memory 인덱스 범위 검증
                     base_index = i * size
