@@ -382,9 +382,16 @@ class UnitBoard:
         if not can_fd_receive_queue.empty():
             logging.info(f'id : {id} unit board is initialized')    
             message = can_fd_receive_queue.get()
-            if message.data[3] == 1:            # 1 : 정상, 0 : 오류
-                fw_version = (message.data[1] << 8) | (message.data[2])
+            if message.data[1] == 1:            # 1 : 정상, 0 : 오류
+                fw_version = (message.data[2] << 8) | (message.data[3])
                 logging.info(f'id : {id} firmware version is : {fw_version * 0.01 : 0.2F}')
+
+                ack_msg = bytes(json.dumps({'CMD':'ACK_INITIALIZE',
+                                            'IDX': 1,           #여기서는 임의의 값
+                                            'FW_VERSION': fw_version,
+                                            'NOTE': 'OK'
+                                            }), 'UTF-8')
+                self.socket_send_queue.put(ack_msg, block=False)
             else:
                 logging.warning(f'id : {id} unit board is wrong response')
         else:
@@ -1073,6 +1080,51 @@ class UnitBoard:
                                         logging.error(f'id : {id} status timer resume 큐가 가득 찼습니다.')
                                     except Exception as e:
                                         logging.error(f'id : {id} status timer resume 요청 실패: {e}')
+                    elif command['CMD'] == 'GET_VERSION':
+                        if int(self.config['ADDRESS']) != 999:
+                            data = [0x0A]                 
+                            crc = self.crc16(data)
+                            data.append(crc & 0xFF)
+                            data.append((crc >> 8) & 0xFF)
+                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = True,
+                                        data=bytearray(data))
+                            
+                            while not can_fd_receive_queue.empty():
+                                can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
+                
+                            self.can_fd_transmitte_queue.put(message) 
+                            wait = 0
+                            while can_fd_receive_queue.empty():
+                                time.sleep(0.01)
+                                wait += 1
+                                if wait > 120:
+                                    break
+                            if not can_fd_receive_queue.empty():
+                                message = can_fd_receive_queue.get()
+                                if message.data[0] == 0x0A:
+                                    logging.info(f'id : {id} Received message: {message}')
+                                    if 'SEND' in command and command['SEND'] and self.socket_send_queue:
+                                        if message.data[1] == 1:
+                                            fw_version = (message.data[2] << 8) | (message.data[3])
+                                            ack_msg = bytes(json.dumps({'CMD':'ACK_INITIALIZE',
+                                                                        'IDX': 1,           #여기서는 임의의 값
+                                                                        'FW_VERSION': fw_version,
+                                                                        'NOTE': 'OK'
+                                                                        }), 'UTF-8')
+                                            self.socket_send_queue.put(ack_msg, block=False)
+                                        else:
+                                            fw_version = (message.data[2] << 8) | (message.data[3])
+                                            ack_msg = bytes(json.dumps({'CMD':'ACK_INITIALIZE',
+                                                                        'IDX': 1,           #여기서는 임의의 값
+                                                                        'FW_VERSION': fw_version,
+                                                                        'NOTE': 'FAIL'
+                                                                        }), 'UTF-8')
+                                            self.socket_send_queue.put(ack_msg, block=False)
+                                else:
+                                    logging.warning(f'id : {id} {command["CMD"]} unit board is wrong response') 
+                            else:
+                                logging.warning(f'id : {id} {command["CMD"]} unit board is not response') 
+                            # logging.info(f'id : {id} UnitBoard execute {command["CMD"]}')
                 self.i2c_semaphor.acquire()
                 i2cbus.write_byte_data(self.GPIOADDR1, 0x12, 0xFF)
                 i2cbus.write_byte_data(self.GPIOADDR1, 0x13, 0xFF)

@@ -76,7 +76,7 @@ class UnitBoardGetStatus(threading.Thread):
     def control_loop(self):
         while True:
             try:
-                message = self.status_control_queue.get()
+                message = self.status_control_queue.get(timeout=1.0)
                 if not message:
                     continue
                 command = message.get('cmd')
@@ -85,6 +85,9 @@ class UnitBoardGetStatus(threading.Thread):
                     self.pause_status_timer(unit_id)
                 elif command == 'RESUME_TIMER':
                     self.resume_status_timer(unit_id)
+            except queue.Empty:
+                # 타임아웃 발생 시 루프를 계속 진행 (정상 동작)
+                continue
             except Exception as e:
                 self.logging.error(f'Status timer control error: {e}')
 
