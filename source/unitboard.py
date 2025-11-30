@@ -1043,7 +1043,7 @@ class UnitBoard:
                                     else:
                                         data = [0xFE]
                                         self.can_fd_transmitte_queue.put(message) 
-                                    
+                                    time.sleep(0.002)
                                 while not can_fd_receive_queue.empty():
                                     can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
                                     
