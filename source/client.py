@@ -111,14 +111,14 @@ class UnitBoardGetStatus(threading.Thread):
                 self.logging.debug(f'펌웨어 업데이트 종료 신호가 도착했지만 대기 중인 pause가 없습니다. (unit:{unit_id})')
                 if not self.timer_active:
                     self.timer_active = True
-                    Timer(1, self.timer_upadate_task).start()
+                    Timer(1, self.timer_update_task).start()
                 return
             self.pause_count -= 1
             if self.pause_count == 0:
                 self.transmit_event.set() # 전송 재개
                 if not self.timer_active:
                     self.timer_active = True
-                    Timer(1, self.timer_upadate_task).start()
+                    Timer(1, self.timer_update_task).start()
                 self.logging.info(f'펌웨어 업데이트가 완료되어 상태 전송 타이머를 재개합니다. (unit:{unit_id})')
             else:
                 self.logging.debug(f'다른 펌웨어 업데이트가 진행 중이므로 타이머 재개를 대기합니다. 남은 count={self.pause_count} (unit:{unit_id})')
@@ -431,7 +431,7 @@ class UnitBoardGetStatus(threading.Thread):
             self.logging.error(f'Critical error in make_json_data: {e}')
             self.consecutive_errors += 1
     
-    def timer_upadate_task(self):
+    def timer_update_task(self):
         """Timer 기반 주기적 상태 업데이트 with 예외 처리"""
         try:
             # Timer 중복 실행 방지
@@ -486,7 +486,7 @@ class UnitBoardGetStatus(threading.Thread):
             try:
                 with self.timer_lock:
                     if self.timer_active:
-                        Timer(1, self.timer_upadate_task).start()
+                        Timer(1, self.timer_update_task).start()
             except Exception as e:
                 self.logging.error(f'Error restarting timer: {e}')
                        
@@ -502,7 +502,7 @@ class UnitBoardGetStatus(threading.Thread):
             # Timer 시작
             with self.timer_lock:
                 self.timer_active = True
-            Timer(1, self.timer_upadate_task).start()
+            Timer(1, self.timer_update_task).start()
             self.logging.info('Timer started for status updates')
             
             reconnect_delay = 1  # 초기 재연결 대기 시간
@@ -538,6 +538,10 @@ class UnitBoardGetStatus(threading.Thread):
                             # get_nowait() 대신 timeout을 주어 타이밍 이슈 완화 및 CPU 부하 감소
                             send_data = self.socket_send_queue.get(timeout=0.1)
                         except queue.Empty:
+                            continue
+                        
+                        # 전송 직전에 한 번 더 체크 (wait 이후 상태 변경 가능성 대비)
+                        if not self.transmit_event.is_set():
                             continue
                         
                         if client and hasattr(client, '_closed') and not client._closed:
