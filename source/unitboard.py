@@ -1043,7 +1043,7 @@ class UnitBoard:
                                     else:
                                         data = [0xFE]
                                         self.can_fd_transmitte_queue.put(message) 
-                                    time.sleep(0.002)
+                                    time.sleep(0.002)                       # 0.002초 대기 없으면 파일 전송 실패 (디버그 모드에서는 동작하나 단독 실행시 실패)
                                 while not can_fd_receive_queue.empty():
                                     can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
                                     

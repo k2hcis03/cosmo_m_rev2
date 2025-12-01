@@ -10,6 +10,8 @@ import queue
 
 from threading import Timer
 from multiprocessing import shared_memory
+from multiprocessing.managers import RemoteError
+import os
 import traceback
 import configparser
 from signal import signal, SIGPIPE, SIG_DFL
@@ -72,11 +74,13 @@ class UnitBoardGetStatus(threading.Thread):
             self.send_data = {"CMD": "SENSOR", "ORDER": "0", "VALUES": [], "STATE": []}
         
         logging.info(f'UnitBoardGetStatus thread initialized') 
+        self.transmit_event = threading.Event()
+        self.transmit_event.set() # 기본적으로 전송 가능 상태
         
     def control_loop(self):
         while True:
             try:
-                message = self.status_control_queue.get(timeout=1.0)
+                message = self.status_control_queue.get(timeout=5.0)
                 if not message:
                     continue
                 command = message.get('cmd')
@@ -95,6 +99,7 @@ class UnitBoardGetStatus(threading.Thread):
         with self.timer_lock:
             self.pause_count += 1
             self.timer_active = False
+            self.transmit_event.clear() # 전송 일시 중지
             if self.pause_count == 1:
                 self.logging.info(f'펌웨어 업데이트 진행으로 상태 전송 타이머를 일시 중지합니다. (unit:{unit_id})')
             else:
@@ -110,6 +115,7 @@ class UnitBoardGetStatus(threading.Thread):
                 return
             self.pause_count -= 1
             if self.pause_count == 0:
+                self.transmit_event.set() # 전송 재개
                 if not self.timer_active:
                     self.timer_active = True
                     Timer(1, self.timer_upadate_task).start()
@@ -524,9 +530,13 @@ class UnitBoardGetStatus(threading.Thread):
                             self.logging.warning('Receive event triggered, reconnecting')
                             raise socket.error('Receive event triggered')
                         
+                        # 펌웨어 업데이트 등으로 인한 전송 일시 중지 대기
+                        self.transmit_event.wait()
+                        
                         try:
                             #send_data = self.socket_send_queue.get_nowait(timeout=5.0)
-                            send_data = self.socket_send_queue.get_nowait()
+                            # get_nowait() 대신 timeout을 주어 타이밍 이슈 완화 및 CPU 부하 감소
+                            send_data = self.socket_send_queue.get(timeout=0.1)
                         except queue.Empty:
                             continue
                         
@@ -566,6 +576,11 @@ class UnitBoardGetStatus(threading.Thread):
                             time.sleep(0.1)
                         except Exception as e:
                             self.logging.error(f'Error sending GET_STATUS during reconnect: {e}')
+                    
+                except RemoteError as e:
+                    self.logging.critical(f"Multiprocessing Manager RemoteError: {e}")
+                    self.logging.critical("Program requires restart due to broken IPC.")
+                    os._exit(1)
                     
                 except Exception as e:
                     self.logging.error(f"Unexpected error in transmitter: {e}")
