@@ -140,7 +140,7 @@ class CosmoMain(threading.Thread):
                     self.command_queue[message['UNIT_ID']].put(message, block=False )
                 else:
                     logging.info(f"Wrong Unit board id{message['UNIT_ID']}")
-            elif message['CMD'] == 'GET_STATUS':  
+            elif message['CMD'] == 'GET_STATUS':  # 2025.12.09 - @K2H CAN FD 멀티 마스터 구현으로 여기 호출 안됨
                 if message['UNIT_ID'] >= 0 and message['UNIT_ID'] < MAXUNITBOARD:
                     self.command_queue[message['UNIT_ID']].put(message, block=False)
                 else:

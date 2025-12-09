@@ -29,7 +29,253 @@ Kd = 0.1  # Derivative gain
 ON = 1
 OFF = 0
 # g_file_path = "./data/JSON_Ref_Stage101.txt"
-                   
+#
+class UnitBoardCanFdReceive(threading.Thread):
+    def __init__(self, id, logging, can_fd_receive_queue, shared_memory_u, shared_memory_size, unit_semaphor, 
+        config, socket_send_queue, status_control_queue, unit_board_instance=None):
+        threading.Thread.__init__(self)
+        self.daemon = True
+        self.id = id                            # id는 0부터 시작
+        self.logging = logging
+        self.can_fd_receive_queue = can_fd_receive_queue
+        self.shared_memory_u = shared_memory_u
+        self.shared_memory_size = shared_memory_size    
+        self.unit_semaphor = unit_semaphor
+        self.config = config
+        self.socket_send_queue = socket_send_queue
+        self.status_control_queue = status_control_queue
+        self.unit_board_instance = unit_board_instance  # UnitBoard 인스턴스 참조 저장
+        self.logging.info(f'id : {self.id} UnitBoard CanFdReceive Thread Run')
+              
+              
+    def run(self):
+        while True:
+            try:
+                time.sleep(0.10)
+                while message := self.can_fd_receive_queue.get():
+                    id = message.arbitration_id - 0x100
+                    if message.data[0] == ConstDefine.SET_CONFIG_COMMAND:
+                        if message.data[1] == 1:            # 1 : 정상, 0 : 오류
+                            self.logging.info(f'id : {id} unit board is initialized')   
+                            fw_version = (message.data[2] << 8) | (message.data[3])
+                            self.logging.info(f'id : {id} firmware version is : {fw_version * 0.01 : 0.2F}')
+
+                            ack_msg = bytes(json.dumps({'CMD':'ACK_INITIALIZE',
+                                                        'IDX': 1,           #여기서는 임의의 값
+                                                        'FW_VERSION': fw_version,
+                                                        'NOTE': 'OK'
+                                                        }), 'UTF-8')
+                            self.socket_send_queue.put(ack_msg, block=False)
+                        else:
+                            self.logging.warning(f'id : {id} unit board is wrong response')
+                    elif message.data[0] == ConstDefine.GET_STATUS_COMMAND:
+                        if message.data[1] == 1:            # 1 : 정상, 0 : 오류
+                            # GET_STATUS_COMMAND 메시지는 디버깅 로그에 출력하지 않음.
+                            # self.logging.info(f'id : {id} Received message: {message}')   
+                                
+                            self.unit_semaphor.acquire()
+
+                            I_mA = (np.float32)(message.data[2] << 8 | message.data[3])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
+                            T = -10 + (I_mA - 4) * (110) / 16                  
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP1 + id*self.shared_memory_size] = (np.int32)(T * 1000)
+
+                            I_mA = (np.float32)(message.data[4] << 8 | message.data[5])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
+                            T = -10 + (I_mA - 4) * (110) / 16                   
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP2 + id*self.shared_memory_size] = (np.int32)(T * 1000)
+
+                            I_mA = (np.float32)(message.data[6] << 8 | message.data[7])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
+                            T = -10 + (I_mA - 4) * (110) / 16                   
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP3 + id*self.shared_memory_size] = (np.int32)(T * 1000)
+
+                            I_mA = (np.float32)(message.data[8] << 8 | message.data[9])*0.001
+                            T = -10 + (I_mA - 4) * (110) / 16                  
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP4 + id*self.shared_memory_size] = (np.int32)(T * 1000)
+
+                            I_mA = (np.float32)(message.data[10] << 8 | message.data[11])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
+                            T = -10 + (I_mA - 4) * (110) / 16                    
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP5 + id*self.shared_memory_size] = (np.int32)(T * 1000)
+
+                            I_mA = (np.float32)(message.data[12] << 8 | message.data[13])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
+                            T = -10 + (I_mA - 4) * (110) / 16                             
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP6 + id*self.shared_memory_size] = (np.int32)(T * 1000)
+
+                            I_mA = (np.float32)(message.data[14] << 8 | message.data[15])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
+                            T = -10 + (I_mA - 4) * (110) / 16                   
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP7 + id*self.shared_memory_size] = (np.int32)(T * 1000)
+
+                            I_mA = (np.float32)(message.data[16] << 8 | message.data[17])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
+                            T = -10 + (I_mA - 4) * (110) / 16                   #-10 ~ 100 C -> 4mA ~ 20mA  유닛보드에서 * 1000이 되므로 여기서 4->4000, 16->16
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP8 + id*self.shared_memory_size] = (np.int32)(T * 1000)
+                            
+                            # 탱크 종류 1: 발효, 2: 제성, 3: 숙성, 4: 제품, 5: 냉각수, 6: 물, 7: 밑술, 8: 펌프, 9:기타
+
+                            if int(self.config['TANK_TYPE']) == 1 or int(self.config['TANK_TYPE']) == 2: #발효, 제성
+                                rs485_1 = (np.int32)(message.data[18] << 8 | message.data[19])
+                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_RPM + id*self.shared_memory_size] = rs485_1       #보드에 따라 RPM 또는 다른 센서 값
+                                rs485_2 = (np.int32)(message.data[20] << 8 | message.data[21])
+                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_LOAD_CELL + id*self.shared_memory_size] = rs485_2 #보드에 따라 load cell 또는 다른 센서 값
+                                rs485_3 = (np.int32)(message.data[22] << 8 | message.data[23])
+                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_PH + id*self.shared_memory_size] = rs485_3      #보드에 따라 ph 또는 다른 센서 값
+                                rs485_4 = (np.int32)(message.data[24] << 8 | message.data[25])
+                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_CO2 + id*self.shared_memory_size] = rs485_4      #보드에 따라 Co2 또는 다른 센서 값
+                                # rs232_1 = (np.float32)(message.data[25] << 8 | message.data[26]) * 0.001
+                                # self.shared_memory_u[0x27 + id*self.shared_memory_size] = (np.int32)(rs232_1)      #보드에 따라 Flower 또는 다른 센서 값
+                            elif int(self.config['TANK_TYPE']) == 3: #숙성
+                                rs485_1 = (np.int32)(message.data[18] << 8 | message.data[19])
+                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_PH + id*self.shared_memory_size] = rs485_1       #보드에 따라 PH 또는 다른 센서 값
+                            elif int(self.config['TANK_TYPE']) == 4: #제품
+                                rs485_1 = (np.int32)(message.data[18] << 8 | message.data[19])
+                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_RPM + id*self.shared_memory_size] = rs485_1       #보드에 따라 RPM 또는 다른 센서 값
+                                rs485_2 = (np.int32)(message.data[20] << 8 | message.data[21])
+                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_LOAD_CELL + id*self.shared_memory_size] = rs485_2      #보드에 따라 load cell 또는 다른 센서 값
+                                rs485_3 = (np.int32)(message.data[22] << 8 | message.data[23])
+                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_PH + id*self.shared_memory_size] = rs485_3      #보드에 따라 ph 또는 다른 센서 값
+                            elif int(self.config['TANK_TYPE']) == 5: #냉각수
+                                pass
+                            elif int(self.config['TANK_TYPE']) == 6: #물
+                                rs485_1 = (np.int32)(message.data[18] << 8 | message.data[19])
+                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_RPM + id*self.shared_memory_size] = rs485_1       #보드에 따라 RPM 또는 다른 센서 값
+                                rs485_2 = (np.int32)(message.data[20] << 8 | message.data[21])
+                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_LOAD_CELL + id*self.shared_memory_size] = rs485_2      #보드에 따라 load cell 또는 다른 센서 값
+                            elif int(self.config['TANK_TYPE']) == 7: #밑술
+                                pass
+                            elif int(self.config['TANK_TYPE']) == 8: #펌프  
+                                pass
+                            elif int(self.config['TANK_TYPE']) == 9: #기타
+                                rs485_1 = (np.int32)(message.data[18] << 8 | message.data[19])
+                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_FLOWER + id*self.shared_memory_size] = rs485_1       #보드에 따라 유량량 또는 다른 센서 값
+                                rs485_2 = (np.int32)(message.data[20] << 8 | message.data[21])
+                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_BRIX + id*self.shared_memory_size] = rs485_2      #보드에 따라 brix 또는 다른 센서 값
+                            
+                            # ADC 값
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC1 + id*self.shared_memory_size] = (np.int32)((message.data[1] << 8) | message.data[2])
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC2 + id*self.shared_memory_size] = (np.int32)((message.data[3] << 8) | message.data[4])
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC3 + id*self.shared_memory_size] = (np.int32)((message.data[5] << 8) | message.data[6])
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC4 + id*self.shared_memory_size] = (np.int32)((message.data[7] << 8) | message.data[8])
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC5 + id*self.shared_memory_size] = (np.int32)((message.data[9] << 8) | message.data[10])
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC6 + id*self.shared_memory_size] = (np.int32)((message.data[11] << 8) | message.data[12])
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC7 + id*self.shared_memory_size] = (np.int32)((message.data[13] << 8) | message.data[14])
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC8 + id*self.shared_memory_size] = (np.int32)((message.data[15] << 8) | message.data[16])
+
+                            # ADC 값에 온도 계산식을 추가해서 공유메모리에 저장 여기서는 2개만 계산하고 필요하면 추가.
+                            # shared_memory_u[0x10 + id*self.shared_memory_size] = float(f'{(inclination1 * shared_memory_u[0 + id*self.shared_memory_size] - y_offset1) * 100 : 0.2F}')
+                            # shared_memory_u[0x11 + id*self.shared_memory_size] = float(f'{(inclination2 * shared_memory_u[1 + id*self.shared_memory_size] - y_offset2) * 100 : 0.2F}')
+                            
+                            # shared_memory_u[0x12 + id*self.shared_memory_size] = float(f'{(inclination3 * shared_memory_u[2 + id*self.shared_memory_size] - y_offset3) * 100 : 0.2F}')
+                            # shared_memory_u[0x13 + id*self.shared_memory_size] = float(f'{(inclination4 * shared_memory_u[3 + id*self.shared_memory_size] - y_offset4) * 100 : 0.2F}')
+                            
+                            # shared_memory_u[0x14 + id*self.shared_memory_size] = float(f'{(inclination5 * shared_memory_u[4 + id*self.shared_memory_size] - y_offset5) * 100 : 0.2F}')
+                            # shared_memory_u[0x15 + id*self.shared_memory_size] = float(f'{(inclination6 * shared_memory_u[5 + id*self.shared_memory_size] - y_offset6) * 100 : 0.2F}')
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_GPO0_7 + id*self.shared_memory_size] = (np.int32)(message.data[28])     #GPO 7~0
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_GPI0_7 + id*self.shared_memory_size] = (np.int32)(message.data[29])    #GPI 7~0
+
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_INVERTER_STATUS + id*self.shared_memory_size] = (np.int32)(message.data[30])    #inverter 상태
+                            # shared_memory_u[0x1F + id*self.shared_memory_size] = (np.int32)(message.data[30])    #inverter 상태
+                            self.unit_semaphor.release()
+                            
+                            # print(f'top temp. is {shared_memory_u[0x10 + id*self.shared_memory_size]*0.01:0.2F} and bottom temp. is {shared_memory_u[0x11 + id*self.shared_memory_size]*0.01}')
+                            # shared_memory_u[0x12 + id*self.shared_memory_size] = float(f'{(inclination3 * shared_memory_u[2 + id*self.shared_memory_size] - y_offset3) * 100 : 0.2F}')
+                            # shared_memory_u[0x13 + id*self.shared_memory_size] = float(f'{(inclination4 * shared_memory_u[3 + id*self.shared_memory_size] - y_offset4) * 100 : 0.2F}')                           
+                        else:
+                            self.logging.warning(f'id : {id} unit board GET_STATUS_COMMAND is wrong response')
+                    elif message.data[0] == ConstDefine.GET_ADC_COMMAND:
+                        if message.data[1] == 1:            # 1 : 정상, 0 : 오류
+                            self.info(f'id : {id} Received message: {message}')
+                            if message.data[0] == 0x03:
+                                self.logging.info(f'id : {id} Received message: {message}')
+                                self.unit_semaphor.acquire()
+                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC1 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[1] << 8) | (np.int32)(message.data[2]))
+                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC2 + id*self.shared_memory_size]  = (np.int32)((np.int32)(message.data[3] << 8) | (np.int32)(message.data[4]))
+                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC3 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[5] << 8) | (np.int32)(message.data[6]))
+                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC4 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[7] << 8) | (np.int32)(message.data[8]))
+                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC5 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[9] << 8) | (np.int32)(message.data[10]))
+                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC6 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[11] << 8) | (np.int32)(message.data[12]))
+                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC7 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[13] << 8) | (np.int32)(message.data[14]))
+                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC8 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[15] << 8) | (np.int32)(message.data[16]))
+                                self.unit_semaphor.release()
+                        else:
+                            self.logging.warning(f'id : {id} unit board GET_ADC_COMMAND is wrong response')
+                    elif message.data[0] == ConstDefine.GET_GPIO_COMMAND:
+                        if message.data[1] == 1:            # 1 : 정상, 0 : 오류
+                            self.logging.info(f'id : {id} unit board is gpio is : {message.data[2]}')
+                        else:
+                            self.logging.warning(f'id : {id} unit board GET_GPIO_COMMAND is wrong response')
+                    elif message.data[0] == ConstDefine.SET_GPIO_COMMAND:
+                        if message.data[1] == 1:            # 1 : 정상, 0 : 오류
+                            self.logging.info(f'id : {id} Received message: SET_GPIO_COMMAND')                                 
+                        else:
+                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'), block=False)
+                            self.logging.warning(f'id : {id} unit board SET_GPIO_COMMAND is wrong response') 
+                    elif message.data[0] == ConstDefine.SET_MOTOR_COMMAND:
+                        if message.data[1] == 1:            # 1 : 정상, 0 : 오류
+                            self.logging.info(f'id : {id} Received message: SET_MOTOR_COMMAND')  
+                        else:
+                            self.logging.warning(f'id : {id} unit board SET_MOTOR_COMMAND is wrong response')
+                    elif message.data[0] == ConstDefine.TEMP_RPM_COMMAND:
+                        if message.data[1] == 1:            # 1 : 정상, 0 : 오류
+                            self.logging.info(f'id : {id} Received message: TEMP_RPM_COMMAND')  
+                        else:
+                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'), block=False)
+                            self.logging.warning(f'id : {id} unit board TEMP_RPM_COMMAND is wrong response')
+                    elif message.data[0] == ConstDefine.TEMP_VALVE_COMMAND:
+                        if message.data[1] == 1:            # 1 : 정상, 0 : 오류
+                            self.logging.info(f'id : {id} Received message: TEMP_VALVE_COMMAND')                               
+                        else:
+                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'), block=False)
+                            self.logging.warning(f'id : {id} unit board TEMP_VALVE_COMMAND is wrong response') 
+                    elif message.data[0] == ConstDefine.WEIGHT_VALVE_COMMAND:
+                        if message.data[1] == 1:            # 1 : 정상, 0 : 오류
+                            self.logging.info(f'id : {id} Received message: WEIGHT_VALVE_COMMAND')
+                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":f"success!"}), 'UTF-8'), block=False)
+                        else:
+                            self.logging.warning(f'id : {id} unit board WEIGHT_VALVE_COMMAND is wrong response') 
+                    elif message.data[0] == ConstDefine.GET_VERSION_COMMAND:
+                        if message.data[1] == 1:            # 1 : 정상, 0 : 오류
+                            self.logging.info(f'id : {id} Received message: GET_VERSION_COMMAND')
+                            if self.socket_send_queue:
+                                fw_version = (message.data[2] << 8) | (message.data[3])
+                                # 아래 명령어를 보내면 서버에서 버전 정보를 업데이트 함.
+                                ack_msg = bytes(json.dumps({'CMD':'ACK_INITIALIZE',                 
+                                                            'IDX': 1,           #여기서는 임의의 값
+                                                            'FW_VERSION': fw_version,
+                                                            'NOTE': 'OK'
+                                                            }), 'UTF-8')
+                                self.socket_send_queue.put(ack_msg, block=False)                                   
+                        else:
+                            fw_version = (message.data[2] << 8) | (message.data[3])
+                            ack_msg = bytes(json.dumps({'CMD':'ACK_INITIALIZE',
+                                                        'IDX': 1,           #여기서는 임의의 값
+                                                        'FW_VERSION': fw_version,
+                                                        'NOTE': 'FAIL'
+                                                        }), 'UTF-8')
+                            self.socket_send_queue.put(ack_msg, block=False)
+                            self.logging.warning(f'id : {id} unit board GET_VERSION_COMMAND is wrong response') 
+                    elif message.data[0] == ConstDefine.FIRMWARE_UPDATE_COMMAND:
+                        if message.data[1] == 1:            # 1 : 정상, 0 : 오류
+                            self.logging.info(f'id : {id} Received message: FIRMWARE_UPDATE_COMMAND')
+                            if self.socket_send_queue:
+                                self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"success!"}), 'UTF-8'), block=False)
+                                self.logging.info(f'id : {id} Firmware update success!')     
+                            if self.status_control_queue:
+                                try:
+                                    time.sleep(0.5)
+                                    if self.unit_board_instance:
+                                        self.unit_board_instance.unit_board_initialize(id, self.logging)
+                                    self.status_control_queue.put({"cmd": "RESUME_TIMER", "unit_id": id}, timeout=1)
+                                except queue.Full:
+                                    self.logging.error(f'id : {id} status timer resume 큐가 가득 찼습니다.')
+                                except Exception as e:
+                                    self.logging.error(f'id : {id} status timer resume 요청 실패: {e}')    
+                        else:
+                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'), block=False)
+                            self.logging.warning(f'id : {id} Firmware update fail!')
+                            self.logging.warning(f'id : {id} unit board FIRMWARE_UPDATE_COMMAND is wrong response') 
+                else:
+                    self.logging.warning(f'id : {id} unit board is not response')    
+            except Exception as e:
+                print(e)
+
+#                    
 class UnitBoardTempControl(threading.Thread):
     def __init__(self, id, event, logging, can_fd_transmitte_queue, 
                  command_queue, shared_memory, unit_semaphor, config, shared_memory_size, dir_name):
@@ -334,13 +580,13 @@ class UnitBoard:
         # self.pid_update()
         self.dir_name = None                # data 기록 디렉토리 생성 ref data 저장 디렉토리
     
-    def unit_board_initialize(self, id, can_fd_receive_queue, logging):
+    def unit_board_initialize(self, id, logging):
         ######################################################################################################################################################
         # 처음 부팅이 되면 환경 설정을 유닛보드로 전송 ################################
         # SET_CONFIG 명령어 수행
         try:
             data = []
-            data.append(0x01)
+            data.append(ConstDefine.SET_CONFIG_COMMAND)
             data.append(int(self.config['MOTOR_ID'], base=16))
             temp = int(self.config['SLEEP_SPEED'])
             data.append((temp >> 8) & 0xff)        #big endian
@@ -363,6 +609,9 @@ class UnitBoard:
             data.append(int(self.config['RS485_4_USAGE']))
             data.append(int(self.config['RS232_1_USAGE']))
             data.append(int(self.config['TEMP_NUM']))
+            temp = int(self.common_config['STATUS_TIME'])
+            data.append((temp >> 8) & 0xff)        #big endian
+            data.append(temp & 0xff)               #big endian
             # message의 data는 bytes형이 아니라면, int들의 list로 처리
             crc = self.crc16(data)
             # CRC16 2byte를 Little Endian으로 배열 뒤에 추가
@@ -372,30 +621,8 @@ class UnitBoard:
                                     data=bytearray(data))
         except ValueError as e:
             print(e)
-            
-        while not can_fd_receive_queue.empty():
-            can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
         
         self.can_fd_transmitte_queue.put(message) 
-        time.sleep(0.10)
-
-        if not can_fd_receive_queue.empty():
-            logging.info(f'id : {id} unit board is initialized')    
-            message = can_fd_receive_queue.get()
-            if message.data[1] == 1:            # 1 : 정상, 0 : 오류
-                fw_version = (message.data[2] << 8) | (message.data[3])
-                logging.info(f'id : {id} firmware version is : {fw_version * 0.01 : 0.2F}')
-
-                ack_msg = bytes(json.dumps({'CMD':'ACK_INITIALIZE',
-                                            'IDX': 1,           #여기서는 임의의 값
-                                            'FW_VERSION': fw_version,
-                                            'NOTE': 'OK'
-                                            }), 'UTF-8')
-                self.socket_send_queue.put(ack_msg, block=False)
-            else:
-                logging.warning(f'id : {id} unit board is wrong response')
-        else:
-            logging.warning(f'id : {id} unit board is not response')    
         ######################################################################################################################################################                        
     # data 리스트에 있는 값들에 대해 CRC16 계산 후 data에 추가
     def crc16(self, data: list):
@@ -425,8 +652,8 @@ class UnitBoard:
         try:
             self.config_file = configparser.ConfigParser()  ## 클래스 객체 생성
             self.config_file.read('/home/pi/Projects/cosmo-m/config/config.ini')  ## 파일 읽기        
-            common_config = self.config_file['common']
-            self.shared_memory_size = int(common_config['SHARED_MEMORY_SIZE'])
+            self.common_config = self.config_file['common']
+            self.shared_memory_size = int(self.common_config['SHARED_MEMORY_SIZE'])
             self.config = self.config_file[f'unit_board{id}']
         except Exception as e:
             logging.error(f'id : {id} config.ini file open error')
@@ -437,9 +664,16 @@ class UnitBoard:
                                                            command_queue, 
                                                            shared_memory_u, unit_semaphor, self.config, self.shared_memory_size, self.dir_name)
         temp_thread.start()
-        self.unit_board_initialize(id, can_fd_receive_queue, logging)
+        while not can_fd_receive_queue.empty():
+            can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
+
+        can_fd_receive_thread = UnitBoardCanFdReceive(id, logging, can_fd_receive_queue, shared_memory_u, self.shared_memory_size, unit_semaphor, 
+            self.config, self.socket_send_queue, self.status_control_queue, unit_board_instance=self)
+        can_fd_receive_thread.start()
+        self.unit_board_initialize(id, logging)
         while True:
             try: 
+                global command
                 command = command_queue.get()
                 
                 if  command['CMD'] != 'GET_STATUS' and command['CMD'] != 'PING':         # GET_STATUS는 계속 호출 되므로 log에 출력 하지 않음.
@@ -570,7 +804,7 @@ class UnitBoard:
                             old_stage = int(command['DATA'][id]['STAGE'])
                     elif command['CMD'] == 'GET_ADC':
                         if int(self.config['ADDRESS']) != 999:
-                            data = [0x03]
+                            data = [ConstDefine.GET_ADC_COMMAND]
                             crc = self.crc16(data)
                             data.append(crc & 0xFF)
                             data.append((crc >> 8) & 0xFF)
@@ -581,45 +815,9 @@ class UnitBoard:
                                 can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
                 
                             self.can_fd_transmitte_queue.put(message) 
-                            # time.sleep(0.06)
-                            wait = 0
-                            while can_fd_receive_queue.empty():
-                                time.sleep(0.01)
-                                wait += 1
-                                if wait > 120:
-                                    break
-                            if not can_fd_receive_queue.empty():
-                                message = can_fd_receive_queue.get()
-                                if message.data[0] == 0x03:
-                                    logging.info(f'id : {id} Received message: {message}')
-                                    unit_semaphor.acquire()
-                                    shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC1 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[1] << 8) | (np.int32)(message.data[2]))
-                                    shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC2 + id*self.shared_memory_size]  = (np.int32)((np.int32)(message.data[3] << 8) | (np.int32)(message.data[4]))
-                                    shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC3 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[5] << 8) | (np.int32)(message.data[6]))
-                                    shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC4 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[7] << 8) | (np.int32)(message.data[8]))
-                                    shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC5 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[9] << 8) | (np.int32)(message.data[10]))
-                                    shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC6 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[11] << 8) | (np.int32)(message.data[12]))
-                                    shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC7 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[13] << 8) | (np.int32)(message.data[14]))
-                                    shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC8 + id*self.shared_memory_size] = (np.int32)((np.int32)(message.data[15] << 8) | (np.int32)(message.data[16]))
-                                    unit_semaphor.release()
-                                    if 'SEND' in command and command['SEND'] and self.socket_send_queue:
-                                        self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"success!", 
-                                                    "ADC1": f'{shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC1 + id*self.shared_memory_size] * 0.001}',
-                                                    "ADC2": f'{shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC2 + id*self.shared_memory_size] * 0.001}',
-                                                    "ADC3": f'{shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC3 + id*self.shared_memory_size] * 0.001}',
-                                                    "ADC4": f'{shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC4 + id*self.shared_memory_size] * 0.001}',
-                                                    "ADC5": f'{shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC5 + id*self.shared_memory_size] * 0.001}',
-                                                    "ADC6": f'{shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC6 + id*self.shared_memory_size] * 0.001}',
-                                                    "ADC7": f'{shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC7 + id*self.shared_memory_size] * 0.001}',
-                                                    "ADC8": f'{shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC8 + id*self.shared_memory_size] * 0.001}'}), 'UTF-8'), block=False)
-                                else:
-                                    logging.warning(f'id : {id} {command["CMD"]} unit board is wrong response') 
-                            else:
-                                logging.warning(f'id : {id} {command["CMD"]} unit board is not response') 
-                            # logging.info(f'id : {id} UnitBoard execute {command["CMD"]}')
                     elif command['CMD'] == 'SET_GPIO':
                         if int(self.config['ADDRESS']) != 999:
-                            data = [0x05]
+                            data = [ConstDefine.SET_GPIO_COMMAND]
                             value = 0
                             for i in range(len(command['VALUE'])):
                                 temp = 0 if command['VALUE'][i] == False else 1
@@ -635,30 +833,10 @@ class UnitBoard:
                                 can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
                 
                             self.can_fd_transmitte_queue.put(message) 
-                            wait = 0
-                            while can_fd_receive_queue.empty():
-                                time.sleep(0.01)
-                                wait += 1
-                                if wait > 120:
-                                    break
-                            if not can_fd_receive_queue.empty():
-                                message = can_fd_receive_queue.get()
-                                if message.data[0] == 0x05:
-                                    logging.info(f'id : {id} Received message: {message}')
-                                    if 'SEND' in command and command['SEND'] and self.socket_send_queue:
-                                        if message.data[1] == 1:
-                                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"success!"}), 'UTF-8'), block=False)
-                                        else:
-                                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'), block=False)
-                                else:
-                                    logging.warning(f'id : {id} {command["CMD"]} unit board is wrong response') 
-                            else:
-                                logging.warning(f'id : {id} {command["CMD"]} unit board is not response') 
-                            # logging.info(f'id : {id} UnitBoard execute {command["CMD"]}')
-                    elif command['CMD'] == 'GET_STATUS':
+                    elif command['CMD'] == 'GET_STATUS':    # 2025.12.09 - @K2H CAN FD 멀티 마스터 구현으로 여기 호출 안됨
                         if int(self.config['ADDRESS']) != 999:
                             # 온도계산 전에 GET_ADC를 호출 함. --> 명령어를 통합하여 ADC 값까지 GET_STATUS에서 읽어 옴.
-                            data = [0x02]
+                            data = [ConstDefine.GET_STATUS_COMMAND]
                             crc = self.crc16(data)
                             # CRC16 2byte를 Little Endian으로 배열 뒤에 추가
                             data.append(crc & 0xFF)
@@ -670,139 +848,6 @@ class UnitBoard:
                                 can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
                             
                             self.can_fd_transmitte_queue.put(message) 
-                            wait = 0
-                            while can_fd_receive_queue.empty():
-                                time.sleep(0.01)
-                                wait += 1
-                                if wait > 120:
-                                    break                           
-                            if not can_fd_receive_queue.empty():
-                                message = can_fd_receive_queue.get()
-                                
-                                if message.data[0] == 0x02:
-                                    if 'SEND' in command and command['SEND']:                      # 로고에 너무 많이 쌓이는 데이터 방지, 
-                                        logging.info(f'id : {id} Received message: {message}')
-                                        
-                                    unit_semaphor.acquire()
-
-                                    I_mA = (np.float32)(message.data[1] << 8 | message.data[2])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
-                                    T = -10 + (I_mA - 4) * (110) / 16                  
-                                    shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP1 + id*self.shared_memory_size] = (np.int32)(T * 1000)
-
-                                    I_mA = (np.float32)(message.data[3] << 8 | message.data[4])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
-                                    T = -10 + (I_mA - 4) * (110) / 16                   
-                                    shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP2 + id*self.shared_memory_size] = (np.int32)(T * 1000)
-
-                                    I_mA = (np.float32)(message.data[5] << 8 | message.data[6])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
-                                    T = -10 + (I_mA - 4) * (110) / 16                   
-                                    shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP3 + id*self.shared_memory_size] = (np.int32)(T * 1000)
-
-                                    I_mA = (np.float32)(message.data[7] << 8 | message.data[8])*0.001
-                                    T = -10 + (I_mA - 4) * (110) / 16                  
-                                    shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP4 + id*self.shared_memory_size] = (np.int32)(T * 1000)
-
-                                    I_mA = (np.float32)(message.data[9] << 8 | message.data[10])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
-                                    T = -10 + (I_mA - 4) * (110) / 16                    
-                                    shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP5 + id*self.shared_memory_size] = (np.int32)(T * 1000)
-
-                                    I_mA = (np.float32)(message.data[11] << 8 | message.data[12])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
-                                    T = -10 + (I_mA - 4) * (110) / 16                             
-                                    shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP6 + id*self.shared_memory_size] = (np.int32)(T * 1000)
-
-                                    I_mA = (np.float32)(message.data[13] << 8 | message.data[14])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
-                                    T = -10 + (I_mA - 4) * (110) / 16                   
-                                    shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP7 + id*self.shared_memory_size] = (np.int32)(T * 1000)
-
-                                    I_mA = (np.float32)(message.data[15] << 8 | message.data[16])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
-                                    T = -10 + (I_mA - 4) * (110) / 16                   #-10 ~ 100 C -> 4mA ~ 20mA  유닛보드에서 * 1000이 되므로 여기서 4->4000, 16->16
-                                    shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP8 + id*self.shared_memory_size] = (np.int32)(T * 1000)
-                                    
-                                    if int(self.config['TANK_TYPE']) == 1 or int(self.config['TANK_TYPE']) == 2: #발효, 제성
-                                        rs485_1 = (np.int32)(message.data[17] << 8 | message.data[18])
-                                        shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_RPM + id*self.shared_memory_size] = rs485_1       #보드에 따라 RPM 또는 다른 센서 값
-                                        rs485_2 = (np.int32)(message.data[19] << 8 | message.data[20])
-                                        shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_LOAD_CELL + id*self.shared_memory_size] = rs485_2 #보드에 따라 load cell 또는 다른 센서 값
-                                        rs485_3 = (np.int32)(message.data[21] << 8 | message.data[22])
-                                        shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_PH + id*self.shared_memory_size] = rs485_3      #보드에 따라 ph 또는 다른 센서 값
-                                        rs485_4 = (np.int32)(message.data[23] << 8 | message.data[24])
-                                        shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_CO2 + id*self.shared_memory_size] = rs485_4      #보드에 따라 Co2 또는 다른 센서 값
-                                        # rs232_1 = (np.float32)(message.data[25] << 8 | message.data[26]) * 0.001
-                                        # shared_memory_u[0x27 + id*self.shared_memory_size] = (np.int32)(rs232_1)      #보드에 따라 Flower 또는 다른 센서 값
-                                    elif int(self.config['TANK_TYPE']) == 3: #숙성
-                                        rs485_1 = (np.int32)(message.data[17] << 8 | message.data[18])
-                                        shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_PH + id*self.shared_memory_size] = rs485_1       #보드에 따라 PH 또는 다른 센서 값
-                                    elif int(self.config['TANK_TYPE']) == 4: #제품
-                                        rs485_1 = (np.int32)(message.data[17] << 8 | message.data[18])
-                                        shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_RPM + id*self.shared_memory_size] = rs485_1       #보드에 따라 RPM 또는 다른 센서 값
-                                        rs485_2 = (np.int32)(message.data[19] << 8 | message.data[20])
-                                        shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_LOAD_CELL + id*self.shared_memory_size] = rs485_2      #보드에 따라 load cell 또는 다른 센서 값
-                                        rs485_3 = (np.int32)(message.data[21] << 8 | message.data[22])
-                                        shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_PH + id*self.shared_memory_size] = rs485_3      #보드에 따라 ph 또는 다른 센서 값
-                                    elif int(self.config['TANK_TYPE']) == 5: #냉각수
-                                        pass
-                                    elif int(self.config['TANK_TYPE']) == 6: #물
-                                        rs485_1 = (np.int32)(message.data[17] << 8 | message.data[18])
-                                        shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_RPM + id*self.shared_memory_size] = rs485_1       #보드에 따라 RPM 또는 다른 센서 값
-                                        rs485_2 = (np.int32)(message.data[19] << 8 | message.data[20])
-                                        shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_LOAD_CELL + id*self.shared_memory_size] = rs485_2      #보드에 따라 load cell 또는 다른 센서 값
-                                    elif int(self.config['TANK_TYPE']) == 7: #밑술
-                                        pass
-                                    elif int(self.config['TANK_TYPE']) == 8: #펌프  
-                                        pass
-                                    elif int(self.config['TANK_TYPE']) == 9: #기타
-                                        rs485_1 = (np.int32)(message.data[17] << 8 | message.data[18])
-                                        shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_FLOWER + id*self.shared_memory_size] = rs485_1       #보드에 따라 유량량 또는 다른 센서 값
-                                        rs485_2 = (np.int32)(message.data[19] << 8 | message.data[20])
-                                        shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_BRIX + id*self.shared_memory_size] = rs485_2      #보드에 따라 brix 또는 다른 센서 값
-                                    
-                                    # ADC 값
-                                    shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC1 + id*self.shared_memory_size] = (np.int32)((message.data[1] << 8) | message.data[2])
-                                    shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC2 + id*self.shared_memory_size] = (np.int32)((message.data[3] << 8) | message.data[4])
-                                    shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC3 + id*self.shared_memory_size] = (np.int32)((message.data[5] << 8) | message.data[6])
-                                    shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC4 + id*self.shared_memory_size] = (np.int32)((message.data[7] << 8) | message.data[8])
-                                    shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC5 + id*self.shared_memory_size] = (np.int32)((message.data[9] << 8) | message.data[10])
-                                    shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC6 + id*self.shared_memory_size] = (np.int32)((message.data[11] << 8) | message.data[12])
-                                    shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC7 + id*self.shared_memory_size] = (np.int32)((message.data[13] << 8) | message.data[14])
-                                    shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC8 + id*self.shared_memory_size] = (np.int32)((message.data[15] << 8) | message.data[16])
-
-                                    # ADC 값에 온도 계산식을 추가해서 공유메모리에 저장 여기서는 2개만 계산하고 필요하면 추가.
-                                    # shared_memory_u[0x10 + id*self.shared_memory_size] = float(f'{(inclination1 * shared_memory_u[0 + id*self.shared_memory_size] - y_offset1) * 100 : 0.2F}')
-                                    # shared_memory_u[0x11 + id*self.shared_memory_size] = float(f'{(inclination2 * shared_memory_u[1 + id*self.shared_memory_size] - y_offset2) * 100 : 0.2F}')
-                                    
-                                    # shared_memory_u[0x12 + id*self.shared_memory_size] = float(f'{(inclination3 * shared_memory_u[2 + id*self.shared_memory_size] - y_offset3) * 100 : 0.2F}')
-                                    # shared_memory_u[0x13 + id*self.shared_memory_size] = float(f'{(inclination4 * shared_memory_u[3 + id*self.shared_memory_size] - y_offset4) * 100 : 0.2F}')
-                                    
-                                    # shared_memory_u[0x14 + id*self.shared_memory_size] = float(f'{(inclination5 * shared_memory_u[4 + id*self.shared_memory_size] - y_offset5) * 100 : 0.2F}')
-                                    # shared_memory_u[0x15 + id*self.shared_memory_size] = float(f'{(inclination6 * shared_memory_u[5 + id*self.shared_memory_size] - y_offset6) * 100 : 0.2F}')
-                                    shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_GPO0_7 + id*self.shared_memory_size] = (np.int32)(message.data[27])     #GPO 7~0
-                                    shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_GPI0_7 + id*self.shared_memory_size] = (np.int32)(message.data[28])    #GPI 7~0
-
-                                    shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_INVERTER_STATUS + id*self.shared_memory_size] = (np.int32)(message.data[29])    #inverter 상태
-                                    # shared_memory_u[0x1F + id*self.shared_memory_size] = (np.int32)(message.data[30])    #inverter 상태
-                                    unit_semaphor.release()
-                                    
-                                    # print(f'top temp. is {shared_memory_u[0x10 + id*self.shared_memory_size]*0.01:0.2F} and bottom temp. is {shared_memory_u[0x11 + id*self.shared_memory_size]*0.01}')
-                                    # shared_memory_u[0x12 + id*self.shared_memory_size] = float(f'{(inclination3 * shared_memory_u[2 + id*self.shared_memory_size] - y_offset3) * 100 : 0.2F}')
-                                    # shared_memory_u[0x13 + id*self.shared_memory_size] = float(f'{(inclination4 * shared_memory_u[3 + id*self.shared_memory_size] - y_offset4) * 100 : 0.2F}')
-                                        
-                                    if 'SEND' in command and command['SEND'] and self.socket_send_queue:  # SEND는 자체 jsonserver_send.py에서 처리하므로 여기서는 처리하지 않음.
-                                        self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"success!", 
-                                            "TEMP1" : f'{shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP1 + id*self.shared_memory_size] * 0.001: 0.2F}',
-                                            "TEMP2" : f'{shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP2 + id*self.shared_memory_size] * 0.001: 0.2F}',
-                                            "GPO7~GPO0": f'{shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_GPO0_7 + id*self.shared_memory_size]}',
-                                            "GPI7~GPI0": f'{shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_GPI0_7 + id*self.shared_memory_size]}',
-                                            "RPM": f'{shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_RPM + id*self.shared_memory_size]}',
-                                            "LOAD CELL": f'{shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_LOAD_CELL + id*self.shared_memory_size] * 0.001 : 0.2F}kg',
-                                            "SENSOR1": f'{shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_BRIX + id*self.shared_memory_size] * 0.001 : 0.2F}',
-                                            "SENSOR2": f'{shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_CO2 + id*self.shared_memory_size] * 0.001 : 0.2F}%',
-                                            "SENSOR3": f'{shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_FLOWER + id*self.shared_memory_size] * 0.001 : 0.2F}%',
-                                            "SENSOR4": f'{shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_PH + id*self.shared_memory_size] * 0.001 : 0.2F}%'
-                                            }), 'UTF-8'), block=False)
-                                else:
-                                    logging.warning(f'id : {id} {command["CMD"]} unit board is wrong response')
-                            else:
-                                logging.warning(f'id : {id} {command["CMD"]} unit board is not response') 
-                            # logging.info(f'id : {id} UnitBoard execute {command["CMD"]}')
                     elif command['CMD'] == 'START_TEMP':
                         if int(self.config['ADDRESS']) != 999:
                             event.set()
@@ -820,7 +865,7 @@ class UnitBoard:
                             # logging.info(f'id : {id} UnitBoard execute {command["CMD"]}')
                     elif command['CMD'] == 'TEMP_RPM':
                         if int(self.config['ADDRESS']) != 999:
-                            data = [0x07]
+                            data = [ConstDefine.TEMP_RPM_COMMAND]
                             temp = int(command['SPEED'])
                             data.append((temp >> 8) & 0xff)        # big endian
                             data.append(temp & 0xff)               # big endian
@@ -839,34 +884,10 @@ class UnitBoard:
                             data.append((crc >> 8) & 0xFF)
                             message = can.Message(is_extended_id=False, is_fd = True, bitrate_switch = True, arbitration_id=id,  
                                         data=bytearray(data))
-                            
-                            while not can_fd_receive_queue.empty():
-                                can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
-                            
                             self.can_fd_transmitte_queue.put(message) 
-                            wait = 0
-                            while can_fd_receive_queue.empty():
-                                time.sleep(0.01)
-                                wait += 1
-                                if wait > 120:
-                                    break                           
-                            if not can_fd_receive_queue.empty():
-                                message = can_fd_receive_queue.get()
-                                if message.data[0] == 0x07:
-                                    logging.info(f'id : {id} Received message: {message}')
-                                    if 'SEND' in command and command['SEND'] and self.socket_send_queue:
-                                        if message.data[1] == 1:
-                                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":f"success!"}), 'UTF-8'), block=False)
-                                        else:
-                                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'), block=False)
-                                else:
-                                    logging.warning(f'id : {id} {command["CMD"]} unit board is wrong response')  
-                            else:
-                                logging.warning(f'id : {id} {command["CMD"]} unit board is not response')   
-                            # logging.info(f'id : {id} UnitBoard execute {command["CMD"]}')
                     elif command['CMD'] == 'TEMP_VALVE':
                         if int(self.config['ADDRESS']) != 999:
-                            data = [0x08]
+                            data = [ConstDefine.TEMP_VALVE_COMMAND]
                             data.append(int(command['CHANNEL']))
                             data.append(int(command['VALUE']))
                             crc = self.crc16(data)
@@ -874,36 +895,10 @@ class UnitBoard:
                             data.append((crc >> 8) & 0xFF)
                             message = can.Message(is_extended_id=False, is_fd = True, bitrate_switch = True, arbitration_id=id,  
                                         data=bytearray(data))
-                            
-                            while not can_fd_receive_queue.empty():
-                                can_fd_receive_queue.get()              # as docs say: Remove and return an item from the queue.
-                            
                             self.can_fd_transmitte_queue.put(message) 
-                            wait = 0
-                            while can_fd_receive_queue.empty():
-                                time.sleep(0.01)
-                                wait += 1
-                                if wait > 120:
-                                    break
-                            if not can_fd_receive_queue.empty():
-                                message = can_fd_receive_queue.get()
-                                if message.data[0] == 0x08:
-                                    logging.info(f'id : {id} Received message: {message}')
-                                    # temp_thread.set_cold_valve(message.data[5])   # 지속적인 재전송을 원하면 주석 해제. 
-                                    
-                                    if 'SEND' in command and command['SEND'] and self.socket_send_queue:
-                                        if message.data[1] == 1:
-                                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":f"success!"}), 'UTF-8'), block=False)
-                                        else:
-                                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'), block=False)
-                                else:
-                                    logging.warning(f'id : {id} {command["CMD"]} unit board is wrong response')  
-                            else:
-                                logging.warning(f'id : {id} {command["CMD"]} unit board is not response')  
-                            # logging.info(f'id : {id} UnitBoard execute {command["CMD"]}')   
                     elif command['CMD'] == 'WEIGHT_VALVE':
                         if int(self.config['ADDRESS']) != 999:
-                            data = [0x09]
+                            data = [ConstDefine.WEIGHT_VALVE_COMMAND]
                             data.append(int(command['CHANNEL']))
                             data.append(int(command['VALUE']))
                             temp = command['WEIGHT']               # int(float(command['CTRL'][0]['PARAM1']) * 10) 
@@ -915,31 +910,8 @@ class UnitBoard:
                             data.append(crc & 0xFF)
                             data.append((crc >> 8) & 0xFF)
                             message = can.Message(is_extended_id=False, is_fd = True, bitrate_switch = True, arbitration_id=id,  
-                                        data=bytearray(data))
-                                
-                            while not can_fd_receive_queue.empty():
-                                can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
-                            
+                                        data=bytearray(data))                           
                             self.can_fd_transmitte_queue.put(message) 
-                            # time.sleep(0.40)
-                            wait = 0
-                            while can_fd_receive_queue.empty():
-                                time.sleep(0.01)
-                                wait += 1
-                                if wait > 120:
-                                    break
-                            if not can_fd_receive_queue.empty():
-                                message = can_fd_receive_queue.get()
-                                if message.data[0] == 0x09:
-                                    logging.info(f'id : {id} Received message: {message}')
-                                    if message.data[1] == 1:
-                                        self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":f"success!"}), 'UTF-8'), block=False)
-                                    else:
-                                        self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'), block=False)
-                                else:
-                                    logging.warning(f'id : {id} {command["CMD"]} unit board is wrong response')  
-                            else:
-                                logging.warning(f'id : {id} {command["CMD"]} unit board is not response')   
                     elif command['CMD'] == 'CTRL':
                         if int(self.config['TANK_ID']) == int(command['TANK_ID']) and int(self.config['ADDRESS']) != 999:
                             if command['CTRL'][0]['SENSOR_ID'] == '500':    #밸브는 4개 밸브 아이디는 500부터 시작 500-> 냉각
@@ -994,7 +966,7 @@ class UnitBoard:
                                 except Exception as e:
                                     logging.error(f'id : {id} status timer pause 요청 실패: {e}')
                             try:
-                                data = [0xFE]
+                                data = [ConstDefine.FIRMWARE_UPDATE_COMMAND]
                                 file_temp = []
                                 is_last = False
                                 with open(command['FILE'], 'rb') as f:
@@ -1041,57 +1013,20 @@ class UnitBoard:
                                     if is_last:
                                         break
                                     else:
-                                        data = [0xFE]
+                                        data = [ConstDefine.FIRMWARE_UPDATE_COMMAND]
                                         self.can_fd_transmitte_queue.put(message) 
                                     time.sleep(0.002)                       # 0.002초 대기 없으면 파일 전송 실패 (디버그 모드에서는 동작하나 단독 실행시 실패)
-                                while not can_fd_receive_queue.empty():
-                                    can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
-                                    
                                 self.can_fd_transmitte_queue.put(message) 
-                                wait = 0
-                                while can_fd_receive_queue.empty():
-                                    time.sleep(0.01)
-                                    wait += 1
-                                    if wait > 120:
-                                        break
-                                if not can_fd_receive_queue.empty():
-                                    message = can_fd_receive_queue.get()
-                                    if message.data[0] == 0xFE:
-                                        logging.info(f'id : {id} Received message: {message}')
-                                        if 'SEND' in command and command['SEND'] and self.socket_send_queue:
-                                            if message.data[1] == 1:
-                                                self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"success!"}), 'UTF-8'), block=False)
-                                                logging.info(f'id : {id} Firmware update success!')
-                                            else:
-                                                self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'), block=False)
-                                                logging.warning(f'id : {id} Firmware update fail!')
-                                    else:
-                                        logging.warning(f'id : {id} {command["CMD"]} unit board is wrong response') 
-                                else:
-                                    logging.warning(f'id : {id} {command["CMD"]} unit board is not response') 
-                                # logging.info(f'id : {id} UnitBoard execute {command["CMD"]}')
-                            finally:
-                                if self.status_control_queue:
-                                    try:
-                                        time.sleep(0.5)
-                                        self.unit_board_initialize(id, can_fd_receive_queue, logging)
-                                        self.status_control_queue.put({"cmd": "RESUME_TIMER", "unit_id": id}, timeout=1)
-                                    except queue.Full:
-                                        logging.error(f'id : {id} status timer resume 큐가 가득 찼습니다.')
-                                    except Exception as e:
-                                        logging.error(f'id : {id} status timer resume 요청 실패: {e}')
+                            except Exception as e:
+                                logging.error(f'id : {id} 펌웨어 업데이트 중 오류 발생: {e}')
                     elif command['CMD'] == 'GET_VERSION':
                         if int(self.config['ADDRESS']) != 999:
-                            data = [0x0A]                 
+                            data = [ConstDefine.GET_VERSION_COMMAND]                 
                             crc = self.crc16(data)
                             data.append(crc & 0xFF)
                             data.append((crc >> 8) & 0xFF)
                             message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = True,
                                         data=bytearray(data))
-                            
-                            while not can_fd_receive_queue.empty():
-                                can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
-                
                             self.can_fd_transmitte_queue.put(message) 
                             wait = 0
                             while can_fd_receive_queue.empty():

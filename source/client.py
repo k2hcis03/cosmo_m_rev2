@@ -440,15 +440,16 @@ class UnitBoardGetStatus(threading.Thread):
                     return
             
             # GET_STATUS 명령 전송
-            for x in range(self.max_unit_board):
-                try:
-                    data = {"UNIT_ID": x, "CMD": "GET_STATUS", "SEND": False}
-                    self.tcp_queue.put(data, block=False)
-                    time.sleep(0.1)     # 시간 조절 해서 모든 유닛보드가 1초안에 GET_STATUS 명령을 보낼 수 있도록 함
-                except queue.Full:
-                    self.logging.warning(f'TCP queue full, skipping unit {x}')
-                except Exception as e:
-                    self.logging.error(f'Error sending GET_STATUS for unit {x}: {e}')
+            # 2025.12.09 - @K2H CAN FD 멀티 마스터 구현. 이젠 유닛보드가 자신의 ID로 데이터 전송.
+            # for x in range(self.max_unit_board):
+            #     try:
+            #         data = {"UNIT_ID": x, "CMD": "GET_STATUS", "SEND": False}
+            #         self.tcp_queue.put(data, block=False)
+            #         time.sleep(0.1)     # 시간 조절 해서 모든 유닛보드가 1초안에 GET_STATUS 명령을 보낼 수 있도록 함
+            #     except queue.Full:
+            #         self.logging.warning(f'TCP queue full, skipping unit {x}')
+            #     except Exception as e:
+            #         self.logging.error(f'Error sending GET_STATUS for unit {x}: {e}')
             
             # JSON 데이터 생성
             try:
