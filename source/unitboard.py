@@ -180,7 +180,6 @@ class UnitBoardCanFdReceive(threading.Thread):
                             self.logging.warning(f'id : {id} unit board GET_STATUS_COMMAND is wrong response')
                     elif message.data[0] == ConstDefine.GET_ADC_COMMAND:
                         if message.data[1] == 1:            # 1 : 정상, 0 : 오류
-                            self.info(f'id : {id} Received message: {message}')
                             if message.data[0] == 0x03:
                                 self.logging.info(f'id : {id} Received message: {message}')
                                 self.unit_semaphor.acquire()
@@ -454,12 +453,12 @@ class UnitBoardTempControl(threading.Thread):
                     if self.file_write:
                         try:
                             if not os.path.isdir(self.dir_name):
-                                os.mkdir(self.dir_name)
+                                os.makedirs(self.dir_name, exist_ok=True)
                             self.writer_csv = open(f'{self.dir_name}/pid_process{self.id}_{self.file_index}.csv', 'w', encoding='utf-8', newline='')
                             self.writer = csv.writer(self.writer_csv, delimiter=',')
-                            self.writer.writerow(['time'] + ['ref.temp'] + ['current temp'] + ['valve on time']  + ['ext1 temp'] + ['ext1 humi'] + 
-                                                 ['ext2 temp'] + ['ext2 humi'] + ['relay1_water'] + ['relay2_cold'] + ['relay3_res1'] + ['relay4_res2'] + ['relay4_res3'] + 
-                                                 ['rpm'] + ['analog1_up'] + ['analog3_res1'] + ['analog4_res2'] + ['analog5_res3'] +['analog6_res4'])   
+                            self.writer.writerow(['time'] + ['ref.temp'] + ['current temp'] + ['valve on time'] + ['relay1_water'] + ['relay2_cold'] + 
+                                                 ['relay3_res1'] + ['relay4_res2'] + ['rpm'] + ['analog1_up'] + ['analog3_res1'] + ['analog4_res2'] + 
+                                                 ['analog5_res3'] +['analog6_res4'] + ['analog7_res5'] + ['analog8_res6'])   
                             #real temp == analog2, 
                             self.file_write = False
                         except Exception as e:
@@ -497,23 +496,24 @@ class UnitBoardTempControl(threading.Thread):
                             # self.logging.info(f'id : {self.id} UnitBoard Temp Control Thread {x} Step Start at {time_start} Time')
                             self.cold_valve_control_timer = True     # ref_step마다 한번씩 ON 해준다.
                             
-                            while (time_start + self.ref_step) > time.time():       #ref_step만큼 시간이 지나면 온도 제어 종료
+                            while (time_start + self.ref_step) > time.time():       #ref_step만큼 시간이 지나면 온도 제어 종료  self.pid_timer_call_time 시간 마다 호출출
                                 if self.temp_control_start:
                                     # client.py에서 data = {"unit_id" : x , "cmd":"GET_STATUS", "send" : False, "raw" : False}
                                     # 로 데이터를 보내므로 온도 값이 계산되어 저장됨 따라서 *0.01을 하면 온도 값으로 사용    
-                                    analog1 = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC1 + self.id*self.shared_memory_size] * 0.01 #온도 센서 1
-                                    analog2 = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC2 + self.id*self.shared_memory_size] * 0.01 #온도 센서 2 온도 제어에 사용하는 하단 온도센서 
-                                    analog3 = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC3 + self.id*self.shared_memory_size] * 0.01 #온도 센서 3
-                                    analog4 = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC4 + self.id*self.shared_memory_size] * 0.01 #온도 센서 4
-                                    analog5 = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC5 + self.id*self.shared_memory_size] * 0.01 #온도 센서 5
-                                    analog6 = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC6 + self.id*self.shared_memory_size] * 0.01 #온도 센서 6
-                                    analog7 = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC7 + self.id*self.shared_memory_size] * 0.01 #온도 센서 6
-                                    analog8 = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC8 + self.id*self.shared_memory_size] * 0.01 #온도 센서 6
+                                    analog1 = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP1 + self.id*self.shared_memory_size] * 0.001 #온도 센서 1
+                                    analog2 = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP2 + self.id*self.shared_memory_size] * 0.001 #온도 센서 2 온도 제어에 사용하는 하단 온도센서 
+                                    analog3 = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP3 + self.id*self.shared_memory_size] * 0.001 #온도 센서 3
+                                    analog4 = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP4 + self.id*self.shared_memory_size] * 0.001 #온도 센서 4
+                                    analog5 = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP5 + self.id*self.shared_memory_size] * 0.001 #온도 센서 5
+                                    analog6 = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP6 + self.id*self.shared_memory_size] * 0.001 #온도 센서 6
+                                    analog7 = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP7 + self.id*self.shared_memory_size] * 0.001 #온도 센서 6
+                                    analog8 = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP8 + self.id*self.shared_memory_size] * 0.001 #온도 센서 6
 
-                                    current_ext_temp1 = self.shared_memory_u[0x0C + self.id*self.shared_memory_size] * 0.1 #Ext Temp1
-                                    current_ext_humi1 = self.shared_memory_u[0x0D + self.id*self.shared_memory_size] * 0.1 #Ext Humi1
-                                    current_ext_temp2 = self.shared_memory_u[0x0E + self.id*self.shared_memory_size] * 0.1 #Ext Temp2
-                                    current_ext_humi2 = self.shared_memory_u[0x0F + self.id*self.shared_memory_size] * 0.1 #Ext Humi2
+                                    # 남양주 버전부터는 외부 온/습도 사용 안함.
+                                    # current_ext_temp1 = self.shared_memory_u[0x0C + self.id*self.shared_memory_size] * 0.1 #Ext Temp1
+                                    # current_ext_humi1 = self.shared_memory_u[0x0D + self.id*self.shared_memory_size] * 0.1 #Ext Humi1
+                                    # current_ext_temp2 = self.shared_memory_u[0x0E + self.id*self.shared_memory_size] * 0.1 #Ext Temp2
+                                    # current_ext_humi2 = self.shared_memory_u[0x0F + self.id*self.shared_memory_size] * 0.1 #Ext Humi2
                                     self.motor_rpm = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_RPM + self.id*self.shared_memory_size]          #RPM
 
                                     gpo0_7 = (self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_GPO0_7 + self.id*self.shared_memory_size]) & 0xFF
@@ -527,9 +527,10 @@ class UnitBoardTempControl(threading.Thread):
                                     gpio8 = (gpo0_7 >> 0) & 0x01
 
                                     if self.file_write_state:                               #STATE가 Run이면 True Pause면 False
-                                        self.writer.writerow([time.time(), ref_temp, analog2, self.cold_valve_on_time, current_ext_temp1, current_ext_humi1, 
-                                                              current_ext_temp2, current_ext_humi2, gpio1, gpio2, gpio3, gpio4, gpio5, self.motor_rpm, 
-                                                              analog1, analog3, analog4, analog5, analog6])
+                                        self.writer.writerow([round(time.time(), 2), round(ref_temp, 2), round(analog2, 2), round(self.cold_valve_on_time, 2), 
+                                                              round(gpio1, 2), round(gpio2, 2), round(gpio3, 2), round(gpio4, 2), round(self.motor_rpm, 2), 
+                                                              round(analog1, 2), round(analog3, 2), round(analog4, 2), round(analog5, 2), round(analog6, 2), 
+                                                              round(analog7, 2), round(analog8, 2)])
                                         print(f'id: {self.id} period: {time.time()} time to on: {self.cold_valve_on_time} REF.TEMP: {ref_temp} and CURRENT.TEMP: {analog2:0.2F}')
                                         
                                         # print(f'id: {self.id} analog1: {analog1} analog3: {analog3} analog4: {analog4} analog5: {analog5} and analog6: {analog6}')
@@ -700,17 +701,17 @@ class UnitBoard:
                 
                 if  command['CMD'] != 'GET_STATUS' and command['CMD'] != 'PING':         # GET_STATUS는 계속 호출 되므로 log에 출력 하지 않음.
                     if command['CMD'] == 'REF':
-                        logging.info(f"{command['CMD']} command is inserted to {command['TANK_ID']} Unit Board")
+                        logging.info(f"{command['CMD']} command is inserted to {id} Unit Board")
                     elif command['CMD'] == 'STATE':
-                        logging.info(f"{command['CMD']} command is inserted Unit Board")
+                        logging.info(f"{command['CMD']} command is inserted to {id} Unit Board")
                     elif command['CMD'] == 'TEMP_VALVE':
-                        logging.info(f"{command['CMD']} and valve {command['VALUE']} command is inserted Unit Board")
+                        logging.info(f"{command['CMD']} and valve {command['VALUE']} command is inserted to {id} Unit Board")
                     elif command['CMD'] == 'WEIGHT_VALVE':
-                        logging.info(f"{command['CMD']} and valve {command['VALUE']} command is inserted Unit Board")
+                        logging.info(f"{command['CMD']} and valve {command['VALUE']} command is inserted to {id} Unit Board")
                     elif command['CMD'] == 'TEMP_RPM':
-                        logging.info(f"{command['CMD']} and rpm {command['SPEED']} command is inserted Unit Board")
+                        logging.info(f"{command['CMD']} and rpm {command['SPEED']} command is inserted to {id} Unit Board")
                     else:
-                        logging.info(f"{command['CMD']} command is inserted Unit Board")
+                        logging.info(f"{command['CMD']} command is inserted to {id} Unit Board")
                 
                 self.i2c_semaphor.acquire()
                 i2cbus = smbus.SMBus(1)
@@ -750,10 +751,11 @@ class UnitBoard:
                         if int(self.config['TANK_ID']) == int(command['TANK_ID']) and int(self.config['ADDRESS']) != 999:
                             temp_thread.ref_datas.append(command)
                             if not os.path.isdir(self.dir_name):    
-                                os.mkdir(self.dir_name)
+                                os.makedirs(self.dir_name, exist_ok=True)
                             # temp_thread.ref_datas를 ref.json으로 저장합니다.
                             try:
-                                ref_json_path = os.path.join(self.dir_name, 'ref.json')
+                                now_str = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+                                ref_json_path = os.path.join(self.dir_name, f'{now_str}_ref.json')
                                 with open(ref_json_path, 'w', encoding='utf-8') as f:
                                     json.dump(temp_thread.ref_datas, f, ensure_ascii=False, indent=4)
                                 logging.info(f'id : {id} ref_datas가 {ref_json_path}에 저장되었습니다.')

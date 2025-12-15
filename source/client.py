@@ -759,122 +759,155 @@ class TcpClientThread(threading.Thread):
                 self.i2c_led_control(on=True)
                 
                 # 수신 루프
+                receive_buffer = bytearray()  # 완전한 JSON을 받기 위한 버퍼
                 while True:
-                    data = bytearray()
                     try:
                         # 데이터 수신
-                        while True:
-                            part = client.recv(4096)  # 4KB 버퍼로 최적화
-                            if not part:  # 연결이 끊어진 경우
-                                self.logging.warning("Connection closed by server")
-                                raise socket.error("Connection closed by server")
-                            data += part
-                            if len(part) < 4096:  # 버퍼 크기에 맞춰 수정
-                                # either 0 or end of data
-                                break
+                        part = client.recv(4096)  # 4KB 버퍼로 최적화
+                        if not part:  # 연결이 끊어진 경우
+                            self.logging.warning("Connection closed by server")
+                            raise socket.error("Connection closed by server")
                         
-                        self.logging.debug(f'Received {len(data)} bytes')
-                        self.consecutive_errors = 0  # 성공 시 에러 카운터 리셋
+                        receive_buffer.extend(part)
+                        self.logging.debug(f'Received {len(part)} bytes, buffer size: {len(receive_buffer)} bytes')
                         
-                    except socket.timeout:
-                        self.logging.warning("Data receive timeout, retrying...")
-                        continue
-                    
-                    # JSON 파싱 및 처리
-                    try:
-                        decoded_data = bytes(data).decode('UTF-8')
-                        data = json.loads(decoded_data)
-                        
-                        # TCP 큐에 데이터 전달
+                        # 완전한 JSON 메시지인지 확인
+                        data = None
                         try:
-                            self.tcp_queue.put(data, block=False)
-                        except queue.Full:
-                            self.logging.warning('TCP queue full, data may be dropped')
-                        
-                        # ACK 응답 전송
-                        try:
-                            ack_msg = bytes(json.dumps({'CMD':'ACK',
-                                                        'IDX': data.get('IDX', 'unknown'),
-                                                        'NOTE': 'OK'
-                                                        }), 'UTF-8')
-                            self.socket_send_queue.put(ack_msg, block=False)
-                        except queue.Full:
-                            self.logging.warning('Socket send queue full, ACK may be dropped')
-                        except Exception as e:
-                            self.logging.error(f'Error sending ACK: {e}')
-                        
-                        time.sleep(0.05)
-                        
-                        # 중복 데이터 체크
-                        if data.get('IDX') == old_data:
-                            same_data_cnt += 1
-                            if same_data_cnt > 2:
-                                self.logging.warning(f'Duplicate data detected (IDX: {old_data}), clearing queue')
-                                same_data_cnt = 0
+                            decoded_data = receive_buffer.decode('UTF-8')
+                            data = json.loads(decoded_data)
+                            
+                            # JSON 파싱 성공 - 완전한 메시지를 받았음
+                            self.logging.debug(f'Complete JSON received: {len(receive_buffer)} bytes')
+                            receive_buffer.clear()  # 버퍼 비우기
+                            self.consecutive_errors = 0  # 성공 시 에러 카운터 리셋
+                            
+                        except json.decoder.JSONDecodeError:
+                            # 아직 완전한 JSON이 아님 - 더 많은 데이터를 기다림
+                            # 중괄호 균형을 체크해서 최소한의 완성도 확인
+                            try:
+                                decoded_str = receive_buffer.decode('UTF-8', errors='ignore')
+                                open_braces = decoded_str.count('{')
+                                close_braces = decoded_str.count('}')
                                 
-                                # 큐 비우기
+                                # 중괄호가 균형을 이루고 있고, 마지막 문자가 } 또는 ]이면 완전할 가능성이 높음
+                                if open_braces == close_braces and len(decoded_str) > 0:
+                                    last_char = decoded_str.rstrip()[-1] if decoded_str.rstrip() else ''
+                                    if last_char in ['}', ']']:
+                                        # 한 번 더 시도
+                                        try:
+                                            data = json.loads(decoded_str)
+                                            self.logging.debug(f'Complete JSON received after balance check: {len(receive_buffer)} bytes')
+                                            receive_buffer.clear()
+                                            self.consecutive_errors = 0
+                                        except json.decoder.JSONDecodeError:
+                                            # 여전히 실패하면 더 기다림
+                                            continue
+                                # 중괄호가 균형을 이루지 않거나 완전하지 않으면 더 기다림
+                                continue
+                            except UnicodeDecodeError:
+                                # 디코딩 오류 - 더 기다림
+                                continue
+                        
+                        except UnicodeDecodeError:
+                            # UTF-8 디코딩 오류 - 더 기다림
+                            continue
+                        
+                        # JSON 파싱 성공한 경우에만 처리 로직 실행
+                        if data is not None:
+                            try:
+                                # TCP 큐에 데이터 전달
                                 try:
-                                    while not self.socket_send_queue.empty():
-                                        self.socket_send_queue.get_nowait()
-                                except Exception as e:
-                                    self.logging.error(f'Error clearing queue: {e}')
+                                    self.tcp_queue.put(data, block=False)
+                                except queue.Full:
+                                    self.logging.warning('TCP queue full, data may be dropped')
                                 
-                                # 재전송 ACK
+                                # ACK 응답 전송
                                 try:
                                     ack_msg = bytes(json.dumps({'CMD':'ACK',
                                                                 'IDX': data.get('IDX', 'unknown'),
                                                                 'NOTE': 'OK'
                                                                 }), 'UTF-8')
                                     self.socket_send_queue.put(ack_msg, block=False)
+                                except queue.Full:
+                                    self.logging.warning('Socket send queue full, ACK may be dropped')
                                 except Exception as e:
-                                    self.logging.error(f'Error sending duplicate ACK: {e}')
+                                    self.logging.error(f'Error sending ACK: {e}')
                                 
-                                receive_event.set()
+                                time.sleep(0.05)
+                                
+                                # 중복 데이터 체크
+                                if data.get('IDX') == old_data:
+                                    same_data_cnt += 1
+                                    if same_data_cnt > 2:
+                                        self.logging.warning(f'Duplicate data detected (IDX: {old_data}), clearing queue')
+                                        same_data_cnt = 0
+                                        
+                                        # 큐 비우기
+                                        try:
+                                            while not self.socket_send_queue.empty():
+                                                self.socket_send_queue.get_nowait()
+                                        except Exception as e:
+                                            self.logging.error(f'Error clearing queue: {e}')
+                                        
+                                        # 재전송 ACK
+                                        try:
+                                            ack_msg = bytes(json.dumps({'CMD':'ACK',
+                                                                        'IDX': data.get('IDX', 'unknown'),
+                                                                        'NOTE': 'OK'
+                                                                        }), 'UTF-8')
+                                            self.socket_send_queue.put(ack_msg, block=False)
+                                        except Exception as e:
+                                            self.logging.error(f'Error sending duplicate ACK: {e}')
+                                        
+                                        receive_event.set()
+                                else:
+                                    same_data_cnt = 0
+                                old_data = data.get('IDX')
+                                
+                            except KeyError as e:
+                                self.logging.error(f'Missing key in JSON data: {e}')
+                                self.consecutive_errors += 1
+                                
+                            except Exception as e:
+                                self.logging.error(f'Unexpected error processing data: {e}')
+                                self.logging.error(traceback.format_exc())
+                                self.consecutive_errors += 1
+                        
+                    except socket.timeout:
+                        # 타임아웃 발생 시 버퍼에 데이터가 있으면 처리 시도
+                        if len(receive_buffer) > 0:
+                            try:
+                                decoded_data = receive_buffer.decode('UTF-8')
+                                data = json.loads(decoded_data)
+                                self.logging.debug(f'Complete JSON received after timeout: {len(receive_buffer)} bytes')
+                                receive_buffer.clear()
+                                self.consecutive_errors = 0
+                                
+                                # 처리 로직 실행
+                                if data is not None:
+                                    try:
+                                        self.tcp_queue.put(data, block=False)
+                                        ack_msg = bytes(json.dumps({'CMD':'ACK',
+                                                                    'IDX': data.get('IDX', 'unknown'),
+                                                                    'NOTE': 'OK'
+                                                                    }), 'UTF-8')
+                                        self.socket_send_queue.put(ack_msg, block=False)
+                                        old_data = data.get('IDX')
+                                    except Exception as e:
+                                        self.logging.error(f'Error processing data after timeout: {e}')
+                            except (json.decoder.JSONDecodeError, UnicodeDecodeError) as e:
+                                self.logging.warning(f"Data receive timeout with incomplete JSON ({len(receive_buffer)} bytes), clearing buffer: {e}")
+                                receive_buffer.clear()
+                                self.consecutive_errors += 1
+                                
+                                # 에러가 너무 많으면 재연결
+                                if self.consecutive_errors >= self.max_error_threshold:
+                                    self.logging.error('Too many JSON errors, reconnecting')
+                                    raise socket.error('Too many JSON errors')
                         else:
-                            same_data_cnt = 0
-                        old_data = data.get('IDX')
-                        
-                    except UnicodeDecodeError as e:
-                        self.logging.error(f'UTF-8 decode error: {e}')
-                        self.consecutive_errors += 1
-                        try:
-                            index = '999'  # JSON 에러 발생 시, 'IDX'값이 쓰레기가 있기때문에 '999'을 강제 셋팅
-                            error_msg = bytes(json.dumps({'CMD':'ACK',
-                                                          'IDX': index,
-                                                          'NOTE': 'DecodeError'
-                                                          }), 'UTF-8')
-                            self.socket_send_queue.put(error_msg, block=False)
-                        except Exception:
-                            pass
-                        
-                    except json.decoder.JSONDecodeError as e:
-                        self.logging.error(f'JSON decode error: {e}')
-                        self.logging.error(f'Data: {bytes(data)[:200]}')  # 처음 200바이트만 로깅
-                        self.consecutive_errors += 1
-                        
-                        try:
-                            index = '999'  # JSON 에러 발생 시, 'IDX'값이 쓰레기가 있기때문에 '999'을 강제 셋팅
-                            error_msg = bytes(json.dumps({'CMD':'ACK',
-                                                          'IDX': index,
-                                                          'NOTE': 'Resend'
-                                                          }), 'UTF-8')
-                            self.socket_send_queue.put(error_msg, block=False)
-                        except Exception as e2:
-                            self.logging.error(f'Error sending error ACK: {e2}')
-                        
-                        # JSON 에러가 너무 많으면 재연결
-                        if self.consecutive_errors >= self.max_error_threshold:
-                            self.logging.error('Too many JSON errors, reconnecting')
-                            raise socket.error('Too many JSON errors')
-                        
-                    except KeyError as e:
-                        self.logging.error(f'Missing key in JSON data: {e}')
-                        self.consecutive_errors += 1
-                        
-                    except Exception as e:
-                        self.logging.error(f'Unexpected error processing data: {e}')
-                        self.logging.error(traceback.format_exc())
-                        self.consecutive_errors += 1
+                            self.logging.warning("Data receive timeout, retrying...")
+                            continue
                         
             except socket.timeout:
                 self.logging.warning(f"Receiver connection timeout to {ip}:{port}")

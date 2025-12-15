@@ -28,3 +28,19 @@ log/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Database files
+*.db
+*.sqlite3
+*.sqlite
+*.sqlite3.db
+*.sqlite3.db-journal
+*.sqlite3.db-lock
+*.sqlite3.db-wal
+*.sqlite3.db-shm
+
+# firmware files
+firmware/
+
+# reference files
+ref/
