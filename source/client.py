@@ -620,6 +620,77 @@ class UnitBoardGetStatus(threading.Thread):
                 self.timer_active = False
             self.logging.info('UnitBoardGetStatus thread stopped')
                 
+def extract_json_objects(buffer_str):
+    """
+    버퍼 문자열에서 완전한 JSON 객체들을 추출합니다.
+    여러 JSON이 연속으로 붙어있어도 하나씩 분리합니다.
+    
+    Returns:
+        (list of dict, remaining_str): 파싱된 JSON 객체 리스트와 남은 문자열
+    """
+    json_objects = []
+    remaining = buffer_str
+    
+    while remaining:
+        remaining = remaining.lstrip()  # 앞쪽 공백 제거
+        if not remaining:
+            break
+            
+        if not remaining.startswith('{'):
+            # JSON 객체가 아닌 경우 - 다음 '{'를 찾음
+            next_brace = remaining.find('{')
+            if next_brace == -1:
+                remaining = ''  # JSON이 없으면 버림
+                break
+            remaining = remaining[next_brace:]
+        
+        # 중괄호 균형을 추적하여 첫 번째 완전한 JSON 객체의 끝을 찾음
+        brace_count = 0
+        in_string = False
+        escape_next = False
+        end_pos = -1
+        
+        for i, char in enumerate(remaining):
+            if escape_next:
+                escape_next = False
+                continue
+                
+            if char == '\\' and in_string:
+                escape_next = True
+                continue
+                
+            if char == '"' and not escape_next:
+                in_string = not in_string
+                continue
+                
+            if in_string:
+                continue
+                
+            if char == '{':
+                brace_count += 1
+            elif char == '}':
+                brace_count -= 1
+                if brace_count == 0:
+                    end_pos = i + 1
+                    break
+        
+        if end_pos == -1:
+            # 완전한 JSON을 찾지 못함 - 더 많은 데이터 필요
+            break
+        
+        # 첫 번째 완전한 JSON 객체 추출
+        json_str = remaining[:end_pos]
+        try:
+            json_obj = json.loads(json_str)
+            json_objects.append(json_obj)
+            remaining = remaining[end_pos:]
+        except json.decoder.JSONDecodeError:
+            # 파싱 실패 - 다음 '{'부터 다시 시도
+            remaining = remaining[1:]
+    
+    return json_objects, remaining
+
+
 class TcpClientThread(threading.Thread):
     def __init__(self, tcp_queue, logging, GPIOADDR1, GPIOADDR2, socket_event, 
                  i2c_semaphor, MAXUNITBOARD, shm_name, unit_np_shm, socket_send_queue, status_control_queue):
@@ -759,63 +830,38 @@ class TcpClientThread(threading.Thread):
                 self.i2c_led_control(on=True)
                 
                 # 수신 루프
-                receive_buffer = bytearray()  # 완전한 JSON을 받기 위한 버퍼
+                receive_buffer = ""  # 완전한 JSON을 받기 위한 문자열 버퍼
                 while True:
                     try:
                         # 데이터 수신
-                        part = client.recv(4096)  # 4KB 버퍼로 최적화
+                        part = client.recv(8192)  # 8KB 버퍼로 확대
                         if not part:  # 연결이 끊어진 경우
                             self.logging.warning("Connection closed by server")
                             raise socket.error("Connection closed by server")
                         
-                        receive_buffer.extend(part)
-                        self.logging.debug(f'Received {len(part)} bytes, buffer size: {len(receive_buffer)} bytes')
-                        
-                        # 완전한 JSON 메시지인지 확인
-                        data = None
                         try:
-                            decoded_data = receive_buffer.decode('UTF-8')
-                            data = json.loads(decoded_data)
-                            
-                            # JSON 파싱 성공 - 완전한 메시지를 받았음
-                            self.logging.debug(f'Complete JSON received: {len(receive_buffer)} bytes')
-                            receive_buffer.clear()  # 버퍼 비우기
-                            self.consecutive_errors = 0  # 성공 시 에러 카운터 리셋
-                            
-                        except json.decoder.JSONDecodeError:
-                            # 아직 완전한 JSON이 아님 - 더 많은 데이터를 기다림
-                            # 중괄호 균형을 체크해서 최소한의 완성도 확인
-                            try:
-                                decoded_str = receive_buffer.decode('UTF-8', errors='ignore')
-                                open_braces = decoded_str.count('{')
-                                close_braces = decoded_str.count('}')
-                                
-                                # 중괄호가 균형을 이루고 있고, 마지막 문자가 } 또는 ]이면 완전할 가능성이 높음
-                                if open_braces == close_braces and len(decoded_str) > 0:
-                                    last_char = decoded_str.rstrip()[-1] if decoded_str.rstrip() else ''
-                                    if last_char in ['}', ']']:
-                                        # 한 번 더 시도
-                                        try:
-                                            data = json.loads(decoded_str)
-                                            self.logging.debug(f'Complete JSON received after balance check: {len(receive_buffer)} bytes')
-                                            receive_buffer.clear()
-                                            self.consecutive_errors = 0
-                                        except json.decoder.JSONDecodeError:
-                                            # 여전히 실패하면 더 기다림
-                                            continue
-                                # 중괄호가 균형을 이루지 않거나 완전하지 않으면 더 기다림
-                                continue
-                            except UnicodeDecodeError:
-                                # 디코딩 오류 - 더 기다림
-                                continue
-                        
+                            receive_buffer += part.decode('UTF-8')
                         except UnicodeDecodeError:
-                            # UTF-8 디코딩 오류 - 더 기다림
+                            # 불완전한 UTF-8 - 버퍼에 바이트로 임시 저장 후 재시도
+                            self.logging.debug('Incomplete UTF-8 sequence, waiting for more data')
                             continue
                         
-                        # JSON 파싱 성공한 경우에만 처리 로직 실행
-                        if data is not None:
+                        self.logging.debug(f'Received {len(part)} bytes, buffer size: {len(receive_buffer)} bytes')
+                        
+                        # 버퍼에서 완전한 JSON 객체들을 추출
+                        json_objects, receive_buffer = extract_json_objects(receive_buffer)
+                        
+                        if not json_objects:
+                            # 완전한 JSON이 없으면 더 기다림
+                            continue
+                        
+                        self.consecutive_errors = 0  # 성공 시 에러 카운터 리셋
+                        
+                        # 추출된 모든 JSON 객체 처리
+                        for data in json_objects:
                             try:
+                                self.logging.debug(f'Processing JSON object: CMD={data.get("CMD", "unknown")}')
+                                
                                 # TCP 큐에 데이터 전달
                                 try:
                                     self.tcp_queue.put(data, block=False)
@@ -833,8 +879,6 @@ class TcpClientThread(threading.Thread):
                                     self.logging.warning('Socket send queue full, ACK may be dropped')
                                 except Exception as e:
                                     self.logging.error(f'Error sending ACK: {e}')
-                                
-                                time.sleep(0.05)
                                 
                                 # 중복 데이터 체크
                                 if data.get('IDX') == old_data:
@@ -874,18 +918,19 @@ class TcpClientThread(threading.Thread):
                                 self.logging.error(traceback.format_exc())
                                 self.consecutive_errors += 1
                         
+                        # 여러 메시지 처리 후 짧은 대기
+                        if len(json_objects) > 1:
+                            self.logging.debug(f'Processed {len(json_objects)} JSON objects in one batch')
+                        time.sleep(0.01)
+                        
                     except socket.timeout:
                         # 타임아웃 발생 시 버퍼에 데이터가 있으면 처리 시도
                         if len(receive_buffer) > 0:
-                            try:
-                                decoded_data = receive_buffer.decode('UTF-8')
-                                data = json.loads(decoded_data)
-                                self.logging.debug(f'Complete JSON received after timeout: {len(receive_buffer)} bytes')
-                                receive_buffer.clear()
+                            json_objects, receive_buffer = extract_json_objects(receive_buffer)
+                            
+                            if json_objects:
                                 self.consecutive_errors = 0
-                                
-                                # 처리 로직 실행
-                                if data is not None:
+                                for data in json_objects:
                                     try:
                                         self.tcp_queue.put(data, block=False)
                                         ack_msg = bytes(json.dumps({'CMD':'ACK',
@@ -896,17 +941,18 @@ class TcpClientThread(threading.Thread):
                                         old_data = data.get('IDX')
                                     except Exception as e:
                                         self.logging.error(f'Error processing data after timeout: {e}')
-                            except (json.decoder.JSONDecodeError, UnicodeDecodeError) as e:
-                                self.logging.warning(f"Data receive timeout with incomplete JSON ({len(receive_buffer)} bytes), clearing buffer: {e}")
-                                receive_buffer.clear()
+                            
+                            # 남은 불완전한 데이터가 너무 크면 경고
+                            if len(receive_buffer) > 65536:  # 64KB 이상
+                                self.logging.warning(f"Buffer too large ({len(receive_buffer)} bytes), clearing")
+                                receive_buffer = ""
                                 self.consecutive_errors += 1
                                 
-                                # 에러가 너무 많으면 재연결
                                 if self.consecutive_errors >= self.max_error_threshold:
-                                    self.logging.error('Too many JSON errors, reconnecting')
-                                    raise socket.error('Too many JSON errors')
+                                    self.logging.error('Too many errors, reconnecting')
+                                    raise socket.error('Too many errors')
                         else:
-                            self.logging.warning("Data receive timeout, retrying...")
+                            self.logging.debug("Data receive timeout, retrying...")
                             continue
                         
             except socket.timeout:

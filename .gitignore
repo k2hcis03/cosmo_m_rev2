@@ -44,3 +44,6 @@ firmware/
 
 # reference files
 ref/
+
+# data files
+data/

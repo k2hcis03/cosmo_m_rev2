@@ -340,7 +340,8 @@ class UnitBoardTempControl(threading.Thread):
         self.ref_continue = False          # 기존 reference 데이터를 사용할지 새로운 reference 데이터를 사용할지 결정
         self.ref_index = 0                  # reference 데이터 인덱스
         self.ref_file_name = None           # reference 데이터 파일 이름
-        
+        self.dir_data_name = None           # data 디렉토리 이름
+
     def set_cold_valve(self, value):
         self.cold_valve_status = value
         x = self.config["SOLVALVE2"]        #냉각수 밸브 I/O 번호
@@ -405,13 +406,14 @@ class UnitBoardTempControl(threading.Thread):
             while True:
                 try:
                     try:
+                        # ref.json 파일이 존재하면 기존 reference 데이터를 사용하고 없으면 새로운 reference 데이터를 사용합니다.
                         self.ref_file_name = self.dir_name+'/ref.json'
                         if os.path.exists(self.ref_file_name):
                             self.logging.info(f"{self.ref_file_name} file is exist 기존 refernce로 진행합니다.")
                             self.ref_continue = True
                             try:
                                 with open(self.ref_file_name, 'r', encoding='utf-8') as f:
-                                    self.ref_datas = json.load(f, ensure_ascii=False, indent=4)
+                                    self.ref_datas = json.load(f)
                                 
                                 self.logging.info(f'id : {self.id} ref_datas을 읽어왔습니다.')
                                 self.ref_stage = int(self.ref_datas['STAGE'])
@@ -431,10 +433,10 @@ class UnitBoardTempControl(threading.Thread):
                     except Exception as e:
                         self.logging.error(f"ref.json 파일 삭제 중 오류 발생: {e}")
                     
+                    self.ref_file_index = self.dir_name+'/ref.index'
                     if self.ref_continue:           #event 기다림 없이 그냥 진행
-                        ref_file_index = self.dir_name+'/ref.index'
                         try:
-                            with open(ref_file_index, 'r', encoding='utf-8') as f:
+                            with open(self.ref_file_index, 'r', encoding='utf-8') as f:
                                 self.ref_index = int(f.read())
                             self.logging.info(f"ref.index 파일을 읽어왔습니다. {self.ref_index}")
                         except Exception as e:
@@ -452,9 +454,9 @@ class UnitBoardTempControl(threading.Thread):
                     ## 온도 테스트를 위한 데이저 저장. 
                     if self.file_write:
                         try:
-                            if not os.path.isdir(self.dir_name):
-                                os.makedirs(self.dir_name, exist_ok=True)
-                            self.writer_csv = open(f'{self.dir_name}/pid_process{self.id}_{self.file_index}.csv', 'w', encoding='utf-8', newline='')
+                            if not os.path.isdir(self.dir_data_name):
+                                os.makedirs(self.dir_data_name, exist_ok=True)
+                            self.writer_csv = open(f'{self.dir_data_name}/pid_process{self.id}_{self.file_index}.csv', 'w', encoding='utf-8', newline='')
                             self.writer = csv.writer(self.writer_csv, delimiter=',')
                             self.writer.writerow(['time'] + ['ref.temp'] + ['current temp'] + ['valve on time'] + ['relay1_water'] + ['relay2_cold'] + 
                                                  ['relay3_res1'] + ['relay4_res2'] + ['rpm'] + ['analog1_up'] + ['analog3_res1'] + ['analog4_res2'] + 
@@ -465,9 +467,9 @@ class UnitBoardTempControl(threading.Thread):
                             print(e)
                     ##############################################################################################################
                     for x in range(self.ref_index, self.ref_total):
-                        ref_file_index = self.dir_name+'/ref.index'       
+                        # self.ref_file_index = self.dir_name      
                         try:
-                            with open(ref_file_index, 'w', encoding='utf-8') as f:
+                            with open(self.ref_file_index, 'w', encoding='utf-8') as f:
                                 f.write(str(x))
                         except Exception as e:
                             self.logging.error(f"ref.index 파일 저장 중 오류 발생: {e}")
@@ -705,11 +707,11 @@ class UnitBoard:
                     elif command['CMD'] == 'STATE':
                         logging.info(f"{command['CMD']} command is inserted to {id} Unit Board")
                     elif command['CMD'] == 'TEMP_VALVE':
-                        logging.info(f"{command['CMD']} and valve {command['VALUE']} command is inserted to {id} Unit Board")
+                        logging.info(f"{command['CMD']} and valve status {command['VALUE']} command is inserted to {id} Unit Board")
                     elif command['CMD'] == 'WEIGHT_VALVE':
-                        logging.info(f"{command['CMD']} and valve {command['VALUE']} command is inserted to {id} Unit Board")
+                        logging.info(f"{command['CMD']} and valve status {command['VALUE']} command is inserted to {id} Unit Board")
                     elif command['CMD'] == 'TEMP_RPM':
-                        logging.info(f"{command['CMD']} and rpm {command['SPEED']} command is inserted to {id} Unit Board")
+                        logging.info(f"{command['CMD']} and rpm speed {command['SPEED']} command is inserted to {id} Unit Board")
                     else:
                         logging.info(f"{command['CMD']} command is inserted to {id} Unit Board")
                 
@@ -754,8 +756,10 @@ class UnitBoard:
                                 os.makedirs(self.dir_name, exist_ok=True)
                             # temp_thread.ref_datas를 ref.json으로 저장합니다.
                             try:
-                                now_str = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-                                ref_json_path = os.path.join(self.dir_name, f'{now_str}_ref.json')
+                                # now_str = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+                                # ref_json_path = os.path.join(self.dir_name, f'{now_str}_ref.json')
+                                # ref.json은 항상 마지막 데이터만 존재하도록 하고 메인 보드가 재부팅 등으로 다시 시작하면 마지막 데이터를 읽어오도록 함.
+                                ref_json_path = os.path.join(self.dir_name, 'ref.json')
                                 with open(ref_json_path, 'w', encoding='utf-8') as f:
                                     json.dump(temp_thread.ref_datas, f, ensure_ascii=False, indent=4)
                                 logging.info(f'id : {id} ref_datas가 {ref_json_path}에 저장되었습니다.')
@@ -781,7 +785,7 @@ class UnitBoard:
                                         temp_thread.ref_data = ref_command['DATA']
                                         temp_thread.ref_total = len(temp_thread.ref_data)
                                     else:
-                                        logging.error(f'id : {id} reference data is empty')
+                                        logging.error(f'id : {id} reference data is empty or restart')
                                     temp_thread.temp_control_start = True
                                     temp_thread.file_write = True
                                     temp_thread.file_write_state = True
@@ -804,14 +808,14 @@ class UnitBoard:
                                     temp_thread.file_write_state = False
                                     event.set()
                                 else:
-                                    logging.error(f'id : {id} reference data is empty')
+                                    logging.error(f'id : {id} reference data is empty or pause')
                                 shared_memory_u[0x18 + id*self.shared_memory_size] = int(command['DATA'][id]['STAGE']) << 16 | 0
                                 status = 3
                             elif command['DATA'][id]['STATUS'] == 'Initial':
                                 temp_thread.temp_control_start = False
                                 temp_thread.file_index = 0
                                 temp_thread.ref_datas.clear()
-                                temp_thread.dir_name = f"/home/pi/Projects/cosmo-m/data/{datetime.datetime.now().strftime('%y%m%d_%H%M%S')}"
+                                temp_thread.dir_data_name = f"/home/pi/Projects/cosmo-m/data/{datetime.datetime.now().strftime('%y%m%d_%H%M%S')}"
                                 shared_memory_u[0x18 + id*self.shared_memory_size] = int(command['DATA'][id]['STAGE']) << 16 | 0
                                 logging.info(f'id : {id} reference data status is  Initial')
                                 status = 4
