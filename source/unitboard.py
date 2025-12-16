@@ -681,8 +681,9 @@ class UnitBoard:
             self.shared_memory_size = int(self.common_config['SHARED_MEMORY_SIZE'])
             self.config = self.config_file[f'unit_board{id}']
         except Exception as e:
-            logging.error(f'id : {id} config.ini file open error')
+            logging.critical(f'id : {id} config.ini file open error - 프로세스를 종료합니다: {e}')
             print(e)
+            return  # config 파일 없이는 동작 불가능하므로 프로세스 종료
         shared_memory_u[id * self.shared_memory_size] = os.getpid()   # id는 shared memory에 첫 번째 데이터  
         # 온도조절 관련 쓰레드 생성 ##################################################
         temp_thread = UnitBoardTempControl(id, event, logging, self.can_fd_transmitte_queue, 
