@@ -169,6 +169,7 @@ class UnitBoardCanFdReceive(threading.Thread):
                             self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_GPI0_7 + id*self.shared_memory_size] = (np.int32)(message.data[29])    #GPI 7~0
 
                             self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_INVERTER_STATUS + id*self.shared_memory_size] = (np.int32)(message.data[30])    #inverter 상태
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ERROR_CODE + id*self.shared_memory_size] = (np.int32)(message.data[45])    #error code
                             # shared_memory_u[0x1F + id*self.shared_memory_size] = (np.int32)(message.data[30])    #inverter 상태
                             self.unit_semaphor.release()
                             
@@ -961,7 +962,10 @@ class UnitBoard:
                             data.append((temp >> 8) & 0xff)        # big endian
                             data.append(temp & 0xff)               # big endian
                             
-                            data.append(int(command['ONTIME']))
+                            temp = int(command['ONTIME'])          # ONTIME은 초 단위로 전송
+                            data.append((temp >> 8) & 0xff)        # big endian
+                            data.append(temp & 0xff)               # big endian
+                            
                             crc = self.crc16(data)
                             data.append(crc & 0xFF)
                             data.append((crc >> 8) & 0xFF)
