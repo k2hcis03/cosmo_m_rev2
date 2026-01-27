@@ -665,6 +665,7 @@ class UnitBoard:
             temp = int(self.common_config['STATUS_TIME'])
             data.append((temp >> 8) & 0xff)        #big endian
             data.append(temp & 0xff)               #big endian
+            data.append(int(self.common_config['UNIT_BOARD_ERROR_DETECTION']))
             # message의 data는 bytes형이 아니라면, int들의 list로 처리
             crc = self.crc16(data)
             # CRC16 2byte를 Little Endian으로 배열 뒤에 추가
