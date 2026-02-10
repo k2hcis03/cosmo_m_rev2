@@ -215,7 +215,8 @@ def main():
     
     # 숫자를 저장할 numpy 배열(1차원) 생성
     shared_mem_size = int(common_config['SHARED_MEMORY_SIZE'])
-    arr = np.array([i for i in range(MAXUNITBOARD * shared_mem_size)], dtype=np.int32) 
+    # 20은 예약 메모리 사이즈와 물탱크 모터 구동에 쓰임
+    arr = np.array([i for i in range(MAXUNITBOARD * shared_mem_size + 20)], dtype=np.int32) 
     # 공유 메모리 생성
     shm = shared_memory.SharedMemory(create=True, size=arr.nbytes)
     # 공유 메모리의 버퍼를 numpy 배열로 변환

@@ -162,6 +162,8 @@ class UnitBoardGetStatus(threading.Thread):
             loadcell_index = [ConstDefine.SHARED_MEMORY_OFFSET_LOAD_CELL, 
                               ConstDefine.SHARED_MEMORY_OFFSET_LOAD_CELL]                   #Load Cell 값이 저장되는 shared_memory 위치
             gpo_index = [ConstDefine.SHARED_MEMORY_OFFSET_GPO0_7, 
+                         ConstDefine.SHARED_MEMORY_OFFSET_GPO0_7,
+                         ConstDefine.SHARED_MEMORY_OFFSET_GPO0_7,
                          ConstDefine.SHARED_MEMORY_OFFSET_GPO0_7]                        #gpo 값이 저장되는 shared_memory 위치
             gpi_index = [ConstDefine.SHARED_MEMORY_OFFSET_GPI0_7, 
                          ConstDefine.SHARED_MEMORY_OFFSET_GPI0_7]                        #gpi 값이 저장되는 shared_memory 위치
@@ -215,6 +217,11 @@ class UnitBoardGetStatus(threading.Thread):
                         if mem_idx < len(self.shared_memory):
                             self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{600+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     
+                    for x in range(int(unit_config.get('PH_NUM', 0))):
+                        mem_idx = base_index + ph_index[x]
+                        if mem_idx < len(self.shared_memory):
+                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{800+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
+
                     # State 정보 추가
                     status_idx = base_index + 0x18
                     index_idx = base_index + 0x17

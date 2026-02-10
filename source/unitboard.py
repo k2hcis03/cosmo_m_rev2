@@ -32,7 +32,7 @@ OFF = 0
 #
 class UnitBoardCanFdReceive(threading.Thread):
     def __init__(self, id, logging, can_fd_receive_queue, shared_memory_u, shared_memory_size, unit_semaphor, 
-        config, socket_send_queue, status_control_queue, unit_board_instance=None):
+        config, socket_send_queue, status_control_queue, unit_board_instance, common_config):
         threading.Thread.__init__(self)
         self.daemon = True
         self.id = id                            # id는 0부터 시작
@@ -45,6 +45,9 @@ class UnitBoardCanFdReceive(threading.Thread):
         self.socket_send_queue = socket_send_queue
         self.status_control_queue = status_control_queue
         self.unit_board_instance = unit_board_instance  # UnitBoard 인스턴스 참조 저장
+        self.common_config = common_config
+        self.water_motor_on_time = 0.0  # 최신 시간 값을 저장하는 변수
+        self.water_motor_on = False
         self.logging.info(f'id: {self.id} UnitBoard CanFdReceive Thread Run')  
               
     def run(self):
@@ -170,6 +173,16 @@ class UnitBoardCanFdReceive(threading.Thread):
 
                             self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_INVERTER_STATUS + id*self.shared_memory_size] = (np.int32)(message.data[30])    #inverter 상태
                             self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ERROR_CODE + id*self.shared_memory_size] = (np.int32)(message.data[45])    #error code
+                            
+                            # 유닛보드에서 물탱크 무게가 되거나 시간이 되서 모터 상태 값을 변경하면 모터 제어 처리함.
+                            if self.water_motor_on_time + 3.0 < time.time() and self.water_motor_on == True:
+                                max_unitboard = int(self.common_config['MAXUNITBOARD'])
+                                # 탱크 종류 0 = 사용하지 않음, 1: 발효, 2: 제성, 3: 숙성, 4: 제품, 5: 냉각수, 6: 물, 7: 밑술, 8: 펌프, 9:기타                      
+                                data = self.shared_memory_u[max_unitboard * self.shared_memory_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR]
+                                if (np.int32)(message.data[31]) == OFF:
+                                    data = data & ~(1 << id)
+                                    self.water_motor_on = False
+                                    self.shared_memory_u[max_unitboard * self.shared_memory_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR] = data
                             # shared_memory_u[0x1F + id*self.shared_memory_size] = (np.int32)(message.data[30])    #inverter 상태
                             self.unit_semaphor.release()
                             
@@ -295,6 +308,66 @@ class UnitBoardCanFdReceive(threading.Thread):
                     self.logging.warning(f'id: {id} unit board is not response')    
             except Exception as e:
                 print(e)
+# 물탱크 유닛보드 일때, 생성되는 쓰레드 #########################
+class UnitBoardWaterWeight(threading.Thread):
+    def __init__(self, id, logging,  shared_memory_u, shared_memory_size, unit_semaphor, config, common_config, command_queue):
+        threading.Thread.__init__(self)
+        self.daemon = True
+        self.id = id                            # id는 0부터 시작
+        self.logging = logging
+        self.shared_memory_u = shared_memory_u
+        self.shared_memory_size = shared_memory_size    
+        self.unit_semaphor = unit_semaphor
+        self.config = config
+        self.common_config = common_config
+        self.command_queue = command_queue
+        self.logging.info(f'id: {self.id} UnitBoard WaterWeight Thread Run')
+        self.gpio_value = [False, False, False, False, False, False, False, False]
+        self.gpio_value_old = [False, False, False, False, False, False, False, False]
+
+    def run(self):
+        while True:
+            try:
+                time.sleep(0.5)  # 0.5초마다 
+                
+                max_unitboard = int(self.common_config['MAXUNITBOARD'])
+                # 공유 메모리에서 물탱크 모터 상태 값 읽기
+                self.unit_semaphor.acquire()
+                water_motor = self.shared_memory_u[max_unitboard * self.shared_memory_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR]
+                chiller1_motor = self.shared_memory_u[max_unitboard * self.shared_memory_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER1_MOTOR]
+                chiller2_motor = self.shared_memory_u[max_unitboard * self.shared_memory_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER2_MOTOR]
+                self.unit_semaphor.release()
+                # 물탱크 모터 제어 명령어 전송
+                if water_motor:
+                    self.logging.info(f'id: {self.id} water motor is on')
+                    self.gpio_value[int(self.config['SOLVALVE1'])] = True
+                else:
+                    self.gpio_value[int(self.config['SOLVALVE1'])] = False
+                
+                # 칠러1 모터 제어 명령어 전송
+                if chiller1_motor:
+                    self.logging.info(f'id: {self.id} chiller1 motor is on')   
+                    self.gpio_value[int(self.config['SOLVALVE2'])] = True
+                else:
+                    self.gpio_value[int(self.config['SOLVALVE2'])] = False
+
+                # 칠러2 모터 제어 명령어 전송   
+                if chiller2_motor:
+                    self.logging.info(f'id: {self.id} chiller2 motor is on')
+                    # 칠러2 모터 제어 명령어 전송
+                    self.gpio_value[int(self.config['SOLVALVE3'])] = True
+                else:
+                    self.gpio_value[int(self.config['SOLVALVE3'])] = False
+
+                if self.gpio_value != self.gpio_value_old:
+                    message = {"UNIT_ID" : self.id,                  
+                    "CMD":"SET_GPIO",
+                    "VALUE" : self.gpio_value}
+                    self.command_queue.put(message, block=False) 
+                self.gpio_value_old = self.gpio_value.copy()
+            except Exception as e:
+                self.logging.error(f'id: {self.id} UnitBoardWaterWeight Thread Error: {e}')
+                print(e)
 
 #                    
 class UnitBoardTempControl(threading.Thread):
@@ -342,6 +415,7 @@ class UnitBoardTempControl(threading.Thread):
         self.ref_file_name = None           # reference 데이터 파일 이름
         self.dir_data_name = None           # data 디렉토리 이름
         self.common_config = common_config
+    
     def set_cold_valve(self, value):
         self.cold_valve_status = value
         x = self.config["SOLVALVE2"]        #냉각수 밸브 I/O 번호
@@ -408,7 +482,7 @@ class UnitBoardTempControl(threading.Thread):
                     # ref.json 파일이 존재하면 기존 reference 데이터를 사용하고 없으면 새로운 reference 데이터를 사용합니다.
                     self.ref_file_name = self.dir_name+'/ref.json'
                     if os.path.exists(self.ref_file_name) and int(self.common_config['REF_RESTART']) == 1:
-                        self.logging.info(f"id: {id} : {self.ref_file_name} file is exist 기존 refernce로 진행합니다.")
+                        self.logging.info(f"id: {self.id} : {self.ref_file_name} file is exist 기존 refernce로 진행합니다.")
                         self.ref_continue = True
                         try:
                             with open(self.ref_file_name, 'r', encoding='utf-8') as f:
@@ -470,6 +544,9 @@ class UnitBoardTempControl(threading.Thread):
                                                         ['relay3_res1'] + ['relay4_res2'] + ['rpm'] + ['analog1_up'] + ['analog3_res1'] + ['analog4_res2'] + 
                                                         ['analog5_res3'] +['analog6_res4'] + ['analog7_res5'] + ['analog8_res6']) 
                             else:
+                                # self.ref_continue == False일 때 dir_data_name이 None일 수 있으므로 초기화 필요
+                                if self.dir_data_name is None:
+                                    self.dir_data_name = f"/home/pi/Projects/cosmo-m/data/{datetime.datetime.now().strftime('%y%m%d_%H%M%S')}"
                                 if not os.path.isdir(self.dir_data_name):
                                     os.makedirs(self.dir_data_name, exist_ok=True)
                                 self.writer_csv = open(f'{self.dir_data_name}/pid_process{self.id}_{self.file_index}.csv', 'w', encoding='utf-8', newline='')
@@ -632,7 +709,8 @@ class UnitBoard:
         self.status_control_queue = status_control_queue
         # self.pid_update()
         self.dir_name = None                # data 기록 디렉토리 생성 ref data 저장 디렉토리
-    
+        self.motor_unit_board_gpo = 0
+
     def unit_board_initialize(self, id, logging):
         ######################################################################################################################################################
         # 처음 부팅이 되면 환경 설정을 유닛보드로 전송 ################################
@@ -689,7 +767,18 @@ class UnitBoard:
                 else:
                     crc >>= 1
         return crc
-    
+
+    # WEIGHT_VALVE 타이머 콜백 함수  모터 구동 시간 후, 모터 정지 처리
+    def timer_callback(self, id, shared_memory_u, unit_semaphor, can_fd_receive_thread):
+        max_unitboard = int(self.common_config['MAXUNITBOARD'])
+        shared_mem_size = int(self.common_config['SHARED_MEMORY_SIZE'])
+        data = shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR]
+        data = data & ~(1 << id)
+        can_fd_receive_thread.water_motor_on = False
+        unit_semaphor.acquire()
+        shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR] = data
+        unit_semaphor.release()
+
     def unit_process(self, n, shm, arr, semaphor, receive_queue, cmd_queue, logging):
         new_shm = shared_memory.SharedMemory(name=shm)
         shared_memory_u = np.ndarray(arr.shape, dtype=arr.dtype, buffer=new_shm.buf)
@@ -723,9 +812,16 @@ class UnitBoard:
             can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
 
         can_fd_receive_thread = UnitBoardCanFdReceive(id, logging, can_fd_receive_queue, shared_memory_u, self.shared_memory_size, unit_semaphor, 
-            self.config, self.socket_send_queue, self.status_control_queue, unit_board_instance=self)
+            self.config, self.socket_send_queue, self.status_control_queue, self, self.common_config)
         can_fd_receive_thread.start()
         self.unit_board_initialize(id, logging)
+        # 물탱크 유닛보드이면 물탱크 무게 측정 쓰레드 생성
+        # 탱크 종류 0 = 사용하지 않음, 1: 발효, 2: 제성, 3: 숙성, 4: 제품, 5: 냉각수, 6: 물, 7: 밑술, 8: 펌프, 9:기타
+        if int(self.config['TANK_TYPE']) == 6:
+            water_weight_thread = UnitBoardWaterWeight(id, logging, shared_memory_u, self.shared_memory_size, unit_semaphor, 
+            self.config, self.common_config, command_queue)
+            water_weight_thread.start()
+            logging.info(f'id: {id} UnitBoard WaterWeight Thread Run')
         while True:
             try: 
                 global command
@@ -798,6 +894,7 @@ class UnitBoard:
                             
                     elif command['CMD'] == 'STATE':
                         if int(self.config['TANK_ID']) == int(command['DATA'][id]['TANK_ID']) and int(self.config['ADDRESS']) != 999:
+                            self.unit_semaphor.acquire()
                             if command['DATA'][id]['STATUS'] == 'None':
                                 temp_thread.temp_control_start = False
                                 shared_memory_u[0x18 + id*self.shared_memory_size] = int(command['DATA'][id]['STAGE']) << 16 | 0
@@ -860,6 +957,7 @@ class UnitBoard:
                             if command['DATA'][id]['STATUS'] == 'Run' and int(command['DATA'][id]['STAGE']) != old_stage:
                                 shared_memory_u[0x17 + id*self.shared_memory_size] = 0
                             old_stage = int(command['DATA'][id]['STAGE'])
+                            self.unit_semaphor.release()
                     elif command['CMD'] == 'GET_ADC':
                         if int(self.config['ADDRESS']) != 999:
                             data = [ConstDefine.GET_ADC_COMMAND]
@@ -945,6 +1043,30 @@ class UnitBoard:
                             self.can_fd_transmitte_queue.put(message) 
                     elif command['CMD'] == 'TEMP_VALVE':
                         if int(self.config['ADDRESS']) != 999:
+                            # 물탱크 유닛보드에 칠러 모터 제어 명령어 전송 후, TEMP_VALVE 명령어 전송
+                            max_unitboard = int(self.common_config['MAXUNITBOARD'])
+                            shared_mem_size = int(self.common_config['SHARED_MEMORY_SIZE'])
+                            self.unit_semaphor.acquire()
+                            # 탱크 종류 0 = 사용하지 않음, 1: 발효, 2: 제성, 3: 숙성, 4: 제품, 5: 냉각수, 6: 물, 7: 밑술, 8: 펌프, 9:기타
+                            if int(self.config['TANK_TYPE']) == 1:
+                                data = shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER1_MOTOR]
+                                if command['VALUE'] == ON:
+                                    data = data | (1 << id)
+                                else:
+                                    data = data & ~(1 << id)
+                                shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER1_MOTOR] = data
+                            elif int(self.config['TANK_TYPE']) == 2:
+                                data = shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER2_MOTOR]
+                                if command['VALUE'] == ON:
+                                    data = data | (1 << id)
+                                else:
+                                    data = data & ~(1 << id)
+                                shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER2_MOTOR] = data
+                            self.unit_semaphor.release()
+                            time.sleep(0.05)     #여유 시간
+                            # 물탱크 유닛보드에 칠러 모터 제어 명령어 전송 끝
+                                       
+                            # TEMP_VALVE 명령어 전송
                             data = [ConstDefine.TEMP_VALVE_COMMAND]
                             data.append(int(command['CHANNEL']))
                             data.append(int(command['VALUE']))
@@ -956,6 +1078,23 @@ class UnitBoard:
                             self.can_fd_transmitte_queue.put(message) 
                     elif command['CMD'] == 'WEIGHT_VALVE':
                         if int(self.config['ADDRESS']) != 999:
+                            # 물탱크 유닛보드에 모터 제어 명령어 전송 후, WEIGHT_VALVE 명령어 전송
+                            max_unitboard = int(self.common_config['MAXUNITBOARD'])
+                            shared_mem_size = int(self.common_config['SHARED_MEMORY_SIZE'])
+                            self.unit_semaphor.acquire()
+                            # 탱크 종류 0 = 사용하지 않음, 1: 발효, 2: 제성, 3: 숙성, 4: 제품, 5: 냉각수, 6: 물, 7: 밑술, 8: 펌프, 9:기타                      
+                            data = shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR]
+                            
+                            if command['VALUE'] == ON:
+                                data = data | (1 << id)
+                            else:
+                                data = data & ~(1 << id)
+                            
+                            shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR] = data
+                            self.unit_semaphor.release()
+                            time.sleep(0.05)     #여유 시간
+                            # 물탱크 유닛보드에 모터 제어 명령어 전송 끝
+                            
                             data = [ConstDefine.WEIGHT_VALVE_COMMAND]
                             data.append(int(command['CHANNEL']))
                             data.append(int(command['VALUE']))
@@ -1002,6 +1141,10 @@ class UnitBoard:
                                             "WEIGHT" : temp, 
                                             "ONTIME" : ontime}
                                 command_queue.put(message, block=False)
+                                current_time = time.time()
+                                can_fd_receive_thread.water_motor_on_time = current_time  # UnitBoardCanFdReceive에 최신 시간 값 전달
+                                can_fd_receive_thread.water_motor_on = True
+                                Timer(ontime, self.timer_callback, args=(id, shared_memory_u, unit_semaphor, can_fd_receive_thread)).start()
                             elif command['CTRL'][0]['SENSOR_ID'] == '502':
                                 pass
                             elif command['CTRL'][0]['SENSOR_ID'] == '503':
