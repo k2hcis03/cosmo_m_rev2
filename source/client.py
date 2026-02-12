@@ -173,8 +173,8 @@ class UnitBoardGetStatus(threading.Thread):
                            ConstDefine.SHARED_MEMORY_OFFSET_RPM]                      #motor 값이 저장되는 shared_memory 위치
             # vavle_index = [1, 0]
             self.order += 1
-                                
-            for i in range(int(common_config['FERMEN_TANK'])):
+
+            for i in range(int(common_config['MAXUNITBOARD'])):
                 try:
                     unit_config = self.config_file[f'unit_board{i}']
                     
@@ -185,12 +185,15 @@ class UnitBoardGetStatus(threading.Thread):
                     if base_index >= len(self.shared_memory):
                         self.logging.warning(f'Shared memory index out of range for FERMEN_TANK {i}')
                         continue
-                    
-                    for x in range(int(unit_config.get('TEMP_NUM', 0))):
+                    # config.ini에서 ADC usage 설정에 따라 온도 센서 또는 유량센서 전송 기능 필요.
+                    x_index = 0
+                    for x in range(int(unit_config.get('ADC_NUM', 0))):
                         mem_idx = base_index + temp_index[x]
-                        if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{100+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
-                    
+                        adc_usage = int(unit_config.get(f'ADC_{x+1}', 0))
+                        if adc_usage == 1 and mem_idx < len(self.shared_memory):
+                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{100+x_index}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
+                            x_index += 1
+
                     for x in range(int(unit_config.get('HUMI_NUM', 0))):
                         mem_idx = base_index + humi_index[x]
                         if mem_idx < len(self.shared_memory):
@@ -207,7 +210,7 @@ class UnitBoardGetStatus(threading.Thread):
                             self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{400+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     
                     for x in range(int(unit_config.get('VALVE_NUM', 0))):
-                        mem_idx = base_index + gpo_index[x]
+                        mem_idx = base_index + gpo_index[x]     #여기에 GPO 8개 정보가 모두 있음.
                         if mem_idx < len(self.shared_memory):
                             self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{500+x}","VALUE":                   # 상단, 하단 솔밸브
                                 f"{(self.shared_memory[mem_idx] >> x) & 0x00000001}"})
@@ -215,13 +218,21 @@ class UnitBoardGetStatus(threading.Thread):
                     for x in range(int(unit_config.get('MOTOR_NUM', 0))):
                         mem_idx = base_index + motor_index[x]
                         if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{600+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
+                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{600+x}","VALUE":f"{self.shared_memory[mem_idx]*1:0.2F}"}) # 모터 속도는 유닛보드에서 *1000을 안함(오버플로우우)
                     
                     for x in range(int(unit_config.get('PH_NUM', 0))):
-                        mem_idx = base_index + ph_index[x]
+                        mem_idx = base_index + ph_index[x]          #ph 값이 저장되는 shared_memory 위치는 ADC_NUM과 상관없이 1개개
                         if mem_idx < len(self.shared_memory):
                             self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{800+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
-
+                    
+                    # 유량센서 전송 기능
+                    x_index = 0
+                    for x in range(int(unit_config.get('ADC_NUM', 0))):
+                        mem_idx = base_index + flow_index[0]          #flow 값이 저장되는 shared_memory 위치는 ADC_NUM과 상관없이 1개
+                        adc_usage = int(unit_config.get(f'ADC_{x+1}', 0))
+                        if adc_usage == 2 and mem_idx < len(self.shared_memory):
+                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{900+x_index}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
+                            x_index += 1
                     # State 정보 추가
                     status_idx = base_index + 0x18
                     index_idx = base_index + 0x17
@@ -238,202 +249,11 @@ class UnitBoardGetStatus(threading.Thread):
                         self.send_data['STATE'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","STAGE":f"{stage}","STATUS":status, "INDEX":f"{index_number}"})
                         
                 except KeyError as e:
-                    self.logging.error(f'Config key error for FERMEN_TANK {i}: {e}')
+                    self.logging.error(f'Config key error for TANK {i}: {e}')
                 except IndexError as e:
-                    self.logging.error(f'Index error for FERMEN_TANK {i}: {e}')
+                    self.logging.error(f'Index error for TANK {i}: {e}')
                 except Exception as e:
-                    self.logging.error(f'Error processing FERMEN_TANK {i}: {e}') 
-            
-            cnt = int(common_config['FERMEN_TANK'])
-            
-            for i in range(int(common_config['BLEND_TANK'])):
-                try:
-                    unit_config = self.config_file[f'unit_board{cnt}']
-                    base_index = (i + cnt) * size
-                    
-                    if base_index >= len(self.shared_memory):
-                        self.logging.warning(f'Shared memory index out of range for BLEND_TANK {i}')
-                        continue
-                    
-                    for x in range(int(unit_config.get('TEMP_NUM', 0))):
-                        mem_idx = base_index + temp_index[x]
-                        if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{100+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
-                    
-                    for x in range(int(unit_config.get('HUMI_NUM', 0))):
-                        mem_idx = base_index + humi_index[x]
-                        if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{200+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
-                    
-                    for x in range(int(unit_config.get('CO2_NUM', 0))):
-                        mem_idx = base_index + co2_index[x]
-                        if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{300+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
-                    
-                    for x in range(int(unit_config.get('LOAD_CELL', 0))):
-                        mem_idx = base_index + 11
-                        if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{400+x}","VALUE":f"{self.shared_memory[mem_idx]*0.01:0.2F}"})
-                    
-                    for x in range(int(unit_config.get('VALVE_NUM', 0))):
-                        mem_idx = base_index + 6
-                        if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{500+x}","VALUE":
-                                f"{(self.shared_memory[mem_idx] & (0x000000FF << x*8)) >> x*8}"})
-                    
-                    for x in range(int(unit_config.get('MOTOR_NUM', 0))):
-                        mem_idx = base_index + 10
-                        if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{600+x}","VALUE":f"{self.shared_memory[mem_idx]}"})
-                    
-                    # State 정보 추가
-                    status_idx = base_index + 0x18
-                    index_idx = base_index + 0x17
-                    
-                    if status_idx < len(self.shared_memory) and index_idx < len(self.shared_memory):
-                        stage = self.shared_memory[status_idx] >> 16
-                        status_code = self.shared_memory[status_idx] & 0x000000FF
-                        
-                        status_map = {0: "None", 1: "Stop", 2: "Run", 3: "Pause", 4: "Initial", 5: "Error"}
-                        status = status_map.get(status_code, "NotDefine")
-                        
-                        index_number = self.shared_memory[index_idx]
-                        self.shared_memory[index_idx] = self.shared_memory[index_idx] + 1
-                        self.send_data['STATE'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","STAGE":f"{stage}","STATUS":status, "INDEX":f"{index_number}"})
-                        
-                except KeyError as e:
-                    self.logging.error(f'Config key error for BLEND_TANK {i}: {e}')
-                except IndexError as e:
-                    self.logging.error(f'Index error for BLEND_TANK {i}: {e}')
-                except Exception as e:
-                    self.logging.error(f'Error processing BLEND_TANK {i}: {e}') 
-                        
-            cnt = int(common_config['FERMEN_TANK']) + int(common_config['BLEND_TANK'])  
-            for i in range(int(common_config['PROD_TANK'])):
-                try:
-                    unit_config = self.config_file[f'unit_board{cnt}']
-                    base_index = (i + cnt) * size
-                    
-                    if base_index >= len(self.shared_memory):
-                        self.logging.warning(f'Shared memory index out of range for PROD_TANK {i}')
-                        continue
-                    
-                    for x in range(int(unit_config.get('TEMP_NUM', 0))):
-                        mem_idx = base_index + temp_index[x]
-                        if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{100+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
-                    
-                    for x in range(int(unit_config.get('HUMI_NUM', 0))):
-                        mem_idx = base_index + humi_index[x]
-                        if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{200+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
-                    
-                    for x in range(int(unit_config.get('CO2_NUM', 0))):
-                        mem_idx = base_index + co2_index[x]
-                        if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{300+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
-                    
-                    for x in range(int(unit_config.get('LOAD_CELL', 0))):
-                        mem_idx = base_index + 11
-                        if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{400+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
-                    
-                    for x in range(int(unit_config.get('VALVE_NUM', 0))):
-                        mem_idx = base_index + 6
-                        if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{500+x}","VALUE":
-                                f"{(self.shared_memory[mem_idx] & (0x000000FF << x*8)) >> x*8}"})
-                    
-                    for x in range(int(unit_config.get('MOTOR_NUM', 0))):
-                        mem_idx = base_index + 10
-                        if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{600+x}","VALUE":f"{self.shared_memory[mem_idx]}"})
-                    
-                    # State 정보 추가
-                    status_idx = base_index + 0x18
-                    index_idx = base_index + 0x17
-                    
-                    if status_idx < len(self.shared_memory) and index_idx < len(self.shared_memory):
-                        stage = self.shared_memory[status_idx] >> 16
-                        status_code = self.shared_memory[status_idx] & 0x000000FF
-                        
-                        status_map = {0: "None", 1: "Stop", 2: "Run", 3: "Pause", 4: "Initial", 5: "Error"}
-                        status = status_map.get(status_code, "NotDefine")
-                        
-                        index_number = self.shared_memory[index_idx]
-                        self.shared_memory[index_idx] = self.shared_memory[index_idx] + 1
-                        self.send_data['STATE'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","STAGE":f"{stage}","STATUS":status, "INDEX":f"{index_number}"})
-                        
-                except KeyError as e:
-                    self.logging.error(f'Config key error for PROD_TANK {i}: {e}')
-                except IndexError as e:
-                    self.logging.error(f'Index error for PROD_TANK {i}: {e}')
-                except Exception as e:
-                    self.logging.error(f'Error processing PROD_TANK {i}: {e}')
-            
-            cnt = int(common_config['FERMEN_TANK']) + int(common_config['BLEND_TANK']) + int(common_config['PROD_TANK'])   
-            for i in range(int(common_config['CHILER_TANK'])):
-                try:
-                    unit_config = self.config_file[f'unit_board{cnt}']
-                    base_index = (i + cnt) * size
-                    
-                    if base_index >= len(self.shared_memory):
-                        self.logging.warning(f'Shared memory index out of range for CHILER_TANK {i}')
-                        continue
-                    
-                    for x in range(int(unit_config.get('TEMP_NUM', 0))):
-                        mem_idx = base_index + temp_index[x]
-                        if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{100+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
-                    
-                    for x in range(int(unit_config.get('HUMI_NUM', 0))):
-                        mem_idx = base_index + humi_index[x]
-                        if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{200+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
-                    
-                    for x in range(int(unit_config.get('CO2_NUM', 0))):
-                        mem_idx = base_index + co2_index[x]
-                        if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{300+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
-                    
-                    for x in range(int(unit_config.get('LOAD_CELL', 0))):
-                        mem_idx = base_index + 11
-                        if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{400+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
-                    
-                    for x in range(int(unit_config.get('VALVE_NUM', 0))):
-                        mem_idx = base_index + 6
-                        if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{500+x}","VALUE":
-                                f"{(self.shared_memory[mem_idx] & (0x000000FF << x*8)) >> x*8}"})
-                    
-                    for x in range(int(unit_config.get('MOTOR_NUM', 0))):
-                        mem_idx = base_index + 10
-                        if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{600+x}","VALUE":f"{self.shared_memory[mem_idx]}"})
-                    
-                    # State 정보 추가
-                    status_idx = base_index + 0x18
-                    index_idx = base_index + 0x17
-                    
-                    if status_idx < len(self.shared_memory) and index_idx < len(self.shared_memory):
-                        stage = self.shared_memory[status_idx] >> 16
-                        status_code = self.shared_memory[status_idx] & 0x000000FF
-                        
-                        status_map = {0: "None", 1: "Stop", 2: "Run", 3: "Pause", 4: "Initial", 5: "Error"}
-                        status = status_map.get(status_code, "NotDefine")
-                        
-                        index_number = self.shared_memory[index_idx]
-                        self.shared_memory[index_idx] = self.shared_memory[index_idx] + 1
-                        self.send_data['STATE'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","STAGE":f"{stage}","STATUS":status, "INDEX":f"{index_number}"})
-                        
-                except KeyError as e:
-                    self.logging.error(f'Config key error for CHILER_TANK {i}: {e}')
-                except IndexError as e:
-                    self.logging.error(f'Index error for CHILER_TANK {i}: {e}')
-                except Exception as e:
-                    self.logging.error(f'Error processing CHILER_TANK {i}: {e}')
-                    
+                    self.logging.error(f'Error processing TANK {i}: {e}')                 
         except Exception as e:
             self.logging.error(f'Critical error in make_json_data: {e}')
             self.consecutive_errors += 1
