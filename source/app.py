@@ -9,6 +9,7 @@ from litestar.params import Body
 
 # 펌웨어 업로드 디렉토리
 # uvicorn app:app --host 172.30.1.100 --port 9002 --reload 실행 명령어
+# uvicorn app:app --host 192.168.100.10 --port 9002 --reload 실행 명령어
 
 UPLOAD_DIR = Path("/home/pi/Projects/cosmo-m/firmware")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)

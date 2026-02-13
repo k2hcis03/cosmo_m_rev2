@@ -153,8 +153,10 @@ class UnitBoardGetStatus(threading.Thread):
                         0x15]                       #습도 값이 저장되는 shared_memory 위치
             co2_index = [ConstDefine.SHARED_MEMORY_OFFSET_CO2, 
                          ConstDefine.SHARED_MEMORY_OFFSET_CO2]                        #Co2 값이 저장되는 shared_memory 위치
-            ph_index = [ConstDefine.SHARED_MEMORY_OFFSET_PH, 
-                        ConstDefine.SHARED_MEMORY_OFFSET_PH]                         #PH 값이 저장되는 shared_memory 위치
+            ph_index = [ConstDefine.SHARED_MEMORY_OFFSET_PH1, 
+                        ConstDefine.SHARED_MEMORY_OFFSET_PH2,
+                        ConstDefine.SHARED_MEMORY_OFFSET_PH3,
+                        ConstDefine.SHARED_MEMORY_OFFSET_PH4]                         #PH 값이 저장되는 shared_memory 위치
             brix_index = [ConstDefine.SHARED_MEMORY_OFFSET_BRIX, 
                           ConstDefine.SHARED_MEMORY_OFFSET_BRIX]                       #Brix 값이 저장되는 shared_memory 위치
             flow_index = [ConstDefine.SHARED_MEMORY_OFFSET_FLOWER, 
@@ -171,7 +173,14 @@ class UnitBoardGetStatus(threading.Thread):
                               ConstDefine.SHARED_MEMORY_OFFSET_INVERTER_STATUS]                   #inverter 값이 저장되는 shared_memory 위치
             motor_index = [ConstDefine.SHARED_MEMORY_OFFSET_RPM, 
                            ConstDefine.SHARED_MEMORY_OFFSET_RPM]                      #motor 값이 저장되는 shared_memory 위치
-            # vavle_index = [1, 0]
+            ct_index = [ConstDefine.SHARED_MEMORY_OFFSET_ADC1, 
+                        ConstDefine.SHARED_MEMORY_OFFSET_ADC2,
+                        ConstDefine.SHARED_MEMORY_OFFSET_ADC3,
+                        ConstDefine.SHARED_MEMORY_OFFSET_ADC4,
+                        ConstDefine.SHARED_MEMORY_OFFSET_ADC5,
+                        ConstDefine.SHARED_MEMORY_OFFSET_ADC6,
+                        ConstDefine.SHARED_MEMORY_OFFSET_ADC7,
+                        ConstDefine.SHARED_MEMORY_OFFSET_ADC8]           #CT 값이 저장되는 shared_memory 위치 
             self.order += 1
 
             for i in range(int(common_config['MAXUNITBOARD'])):
@@ -191,48 +200,67 @@ class UnitBoardGetStatus(threading.Thread):
                         mem_idx = base_index + temp_index[x]
                         adc_usage = int(unit_config.get(f'ADC_{x+1}', 0))
                         if adc_usage == 1 and mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{100+x_index}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
+                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1100+x_index}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                             x_index += 1
 
                     for x in range(int(unit_config.get('HUMI_NUM', 0))):
                         mem_idx = base_index + humi_index[x]
                         if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{200+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
+                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1200+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     
                     for x in range(int(unit_config.get('CO2_NUM', 0))):
                         mem_idx = base_index + co2_index[x]
                         if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{300+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
+                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1300+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     
                     for x in range(int(unit_config.get('LOAD_CELL', 0))):
                         mem_idx = base_index + loadcell_index[x]        #11
                         if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{400+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
+                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1400+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     
                     for x in range(int(unit_config.get('VALVE_NUM', 0))):
                         mem_idx = base_index + gpo_index[x]     #여기에 GPO 8개 정보가 모두 있음.
                         if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{500+x}","VALUE":                   # 상단, 하단 솔밸브
+                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1500+x}","VALUE":                   # 상단, 하단 솔밸브
                                 f"{(self.shared_memory[mem_idx] >> x) & 0x00000001}"})
                     
-                    for x in range(int(unit_config.get('MOTOR_NUM', 0))):
+                    for x in range(int(unit_config.get('MOTOR_NUM', 0))): 
                         mem_idx = base_index + motor_index[x]
                         if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{600+x}","VALUE":f"{self.shared_memory[mem_idx]*1:0.2F}"}) # 모터 속도는 유닛보드에서 *1000을 안함(오버플로우우)
+                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1600+x}","VALUE":f"{self.shared_memory[mem_idx]*1:0.2F}"}) # 모터 속도는 유닛보드에서 *1000을 안함(오버플로우우)
                     
                     for x in range(int(unit_config.get('PH_NUM', 0))):
-                        mem_idx = base_index + ph_index[x]          #ph 값이 저장되는 shared_memory 위치는 ADC_NUM과 상관없이 1개개
+                        mem_idx = base_index + ph_index[x]          #ph 값이 저장되는 shared_memory 위치는 ADC_NUM과 상관없이 1개이기 때문에 x가 0이여도 됨.
                         if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{800+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
+                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1700+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     
+                    for x in range(int(unit_config.get('BRIX_NUM', 0))):
+                        mem_idx = base_index + brix_index[x]          #brix 값이 저장되는 shared_memory 위치는 ADC_NUM과 상관없이 1개이기 때문에 x가 0이여도 됨.
+                        if mem_idx < len(self.shared_memory):
+                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1700+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
+
                     # 유량센서 전송 기능
                     x_index = 0
                     for x in range(int(unit_config.get('ADC_NUM', 0))):
                         mem_idx = base_index + flow_index[0]          #flow 값이 저장되는 shared_memory 위치는 ADC_NUM과 상관없이 1개
                         adc_usage = int(unit_config.get(f'ADC_{x+1}', 0))
                         if adc_usage == 2 and mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{900+x_index}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
+                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{2000+x_index}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                             x_index += 1
+
+                    # CT 센서 전송 기능  김휴정 박사와 협의 필요
+                    for x in range(int(unit_config.get('ADC_NUM', 0))):
+                        mem_idx = base_index + ct_index[x]
+                        adc_usage = int(unit_config.get(f'ADC_{x+1}', 0))
+                        if adc_usage == 7 and mem_idx < len(self.shared_memory):
+                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{2101}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
+                        elif adc_usage == 8 and mem_idx < len(self.shared_memory):
+                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{2102}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
+                        elif adc_usage == 9 and mem_idx < len(self.shared_memory):
+                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{2103}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
+                        elif adc_usage == 10 and mem_idx < len(self.shared_memory):
+                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{2104}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
+                    
                     # State 정보 추가
                     status_idx = base_index + 0x18
                     index_idx = base_index + 0x17

@@ -117,21 +117,27 @@ class UnitBoardCanFdReceive(threading.Thread):
                                 rs485_2 = (np.int32)(message.data[20] << 8 | message.data[21])
                                 self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_LOAD_CELL + id*self.shared_memory_size] = rs485_2 #보드에 따라 load cell 또는 다른 센서 값
                                 rs485_3 = (np.int32)(message.data[22] << 8 | message.data[23])
-                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_PH + id*self.shared_memory_size] = rs485_3      #보드에 따라 ph 또는 다른 센서 값
+                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_PH1 + id*self.shared_memory_size] = rs485_3      #보드에 따라 ph 또는 다른 센서 값
                                 rs485_4 = (np.int32)(message.data[24] << 8 | message.data[25])
                                 self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_CO2 + id*self.shared_memory_size] = rs485_4      #보드에 따라 Co2 또는 다른 센서 값
                                 # rs232_1 = (np.float32)(message.data[25] << 8 | message.data[26]) * 0.001
                                 # self.shared_memory_u[0x27 + id*self.shared_memory_size] = (np.int32)(rs232_1)      #보드에 따라 Flower 또는 다른 센서 값
                             elif int(self.config['TANK_TYPE']) == 3: #숙성
                                 rs485_1 = (np.int32)(message.data[18] << 8 | message.data[19])
-                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_PH + id*self.shared_memory_size] = rs485_1       #보드에 따라 PH 또는 다른 센서 값
+                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_PH1 + id*self.shared_memory_size] = rs485_1       #보드에 따라 PH1 또는 다른 센서 값
+                                rs485_2 = (np.int32)(message.data[20] << 8 | message.data[21])
+                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_PH2 + id*self.shared_memory_size] = rs485_2       #보드에 따라 PH2 또는 다른 센서 값
+                                rs485_3 = (np.int32)(message.data[22] << 8 | message.data[23])
+                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_PH3 + id*self.shared_memory_size] = rs485_3      #보드에 따라 PH3 또는 다른 센서 값
+                                rs485_4 = (np.int32)(message.data[24] << 8 | message.data[25])
+                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_PH4 + id*self.shared_memory_size] = rs485_4      #보드에 따라 PH4 또는 다른 센서 값 
                             elif int(self.config['TANK_TYPE']) == 4: #제품
                                 rs485_1 = (np.int32)(message.data[18] << 8 | message.data[19])
                                 self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_RPM + id*self.shared_memory_size] = rs485_1       #보드에 따라 RPM 또는 다른 센서 값
                                 rs485_2 = (np.int32)(message.data[20] << 8 | message.data[21])
                                 self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_LOAD_CELL + id*self.shared_memory_size] = rs485_2      #보드에 따라 load cell 또는 다른 센서 값
                                 rs485_3 = (np.int32)(message.data[22] << 8 | message.data[23])
-                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_PH + id*self.shared_memory_size] = rs485_3      #보드에 따라 ph 또는 다른 센서 값
+                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_PH1 + id*self.shared_memory_size] = rs485_3      #보드에 따라 ph 또는 다른 센서 값
                             elif int(self.config['TANK_TYPE']) == 5: #냉각수
                                 pass
                             elif int(self.config['TANK_TYPE']) == 6: #물
@@ -150,27 +156,17 @@ class UnitBoardCanFdReceive(threading.Thread):
                                 self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_BRIX + id*self.shared_memory_size] = rs485_2      #보드에 따라 brix 또는 다른 센서 값
                             
                             # ADC 값
-                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC1 + id*self.shared_memory_size] = (np.int32)((message.data[1] << 8) | message.data[2])
-                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC2 + id*self.shared_memory_size] = (np.int32)((message.data[3] << 8) | message.data[4])
-                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC3 + id*self.shared_memory_size] = (np.int32)((message.data[5] << 8) | message.data[6])
-                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC4 + id*self.shared_memory_size] = (np.int32)((message.data[7] << 8) | message.data[8])
-                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC5 + id*self.shared_memory_size] = (np.int32)((message.data[9] << 8) | message.data[10])
-                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC6 + id*self.shared_memory_size] = (np.int32)((message.data[11] << 8) | message.data[12])
-                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC7 + id*self.shared_memory_size] = (np.int32)((message.data[13] << 8) | message.data[14])
-                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC8 + id*self.shared_memory_size] = (np.int32)((message.data[15] << 8) | message.data[16])
-
-                            # ADC 값에 온도 계산식을 추가해서 공유메모리에 저장 여기서는 2개만 계산하고 필요하면 추가.
-                            # shared_memory_u[0x10 + id*self.shared_memory_size] = float(f'{(inclination1 * shared_memory_u[0 + id*self.shared_memory_size] - y_offset1) * 100 : 0.2F}')
-                            # shared_memory_u[0x11 + id*self.shared_memory_size] = float(f'{(inclination2 * shared_memory_u[1 + id*self.shared_memory_size] - y_offset2) * 100 : 0.2F}')
-                            
-                            # shared_memory_u[0x12 + id*self.shared_memory_size] = float(f'{(inclination3 * shared_memory_u[2 + id*self.shared_memory_size] - y_offset3) * 100 : 0.2F}')
-                            # shared_memory_u[0x13 + id*self.shared_memory_size] = float(f'{(inclination4 * shared_memory_u[3 + id*self.shared_memory_size] - y_offset4) * 100 : 0.2F}')
-                            
-                            # shared_memory_u[0x14 + id*self.shared_memory_size] = float(f'{(inclination5 * shared_memory_u[4 + id*self.shared_memory_size] - y_offset5) * 100 : 0.2F}')
-                            # shared_memory_u[0x15 + id*self.shared_memory_size] = float(f'{(inclination6 * shared_memory_u[5 + id*self.shared_memory_size] - y_offset6) * 100 : 0.2F}')
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC1 + id*self.shared_memory_size] = (np.float32)(message.data[2] << 8 | message.data[3])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC2 + id*self.shared_memory_size] = (np.float32)(message.data[4] << 8 | message.data[5])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC3 + id*self.shared_memory_size] = (np.float32)(message.data[6] << 8 | message.data[7])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC4 + id*self.shared_memory_size] = (np.float32)(message.data[8] << 8 | message.data[9])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC5 + id*self.shared_memory_size] = (np.float32)(message.data[10] << 8 | message.data[11])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC6 + id*self.shared_memory_size] = (np.float32)(message.data[12] << 8 | message.data[13])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC7 + id*self.shared_memory_size] = (np.float32)(message.data[14] << 8 | message.data[15])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC8 + id*self.shared_memory_size] = (np.float32)(message.data[16] << 8 | message.data[17])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
                             self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_GPO0_7 + id*self.shared_memory_size] = (np.int32)(message.data[28])     #GPO 7~0
                             self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_GPI0_7 + id*self.shared_memory_size] = (np.int32)(message.data[29])    #GPI 7~0
-
+                            
                             self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_INVERTER_STATUS + id*self.shared_memory_size] = (np.int32)(message.data[30])    #inverter 상태
                             self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ERROR_CODE + id*self.shared_memory_size] = (np.int32)(message.data[45])    #error code
                             
@@ -893,17 +889,18 @@ class UnitBoard:
                                 logging.error(f'id: {id} ref_datas를 ref.json으로 저장하는 중 오류 발생: {e}')
                             
                     elif command['CMD'] == 'STATE':
-                        if int(self.config['TANK_ID']) == int(command['DATA'][id]['TANK_ID']) and int(self.config['ADDRESS']) != 999:
-                            self.unit_semaphor.acquire()
-                            if command['DATA'][id]['STATUS'] == 'None':
+                        # STATE 문 수정해야 함.
+                        if int(self.config['TANK_ID']) == int(command['TANK_ID']) and int(self.config['ADDRESS']) != 999:
+                            unit_semaphor.acquire()
+                            if command['STATUS'] == 'None':
                                 temp_thread.temp_control_start = False
-                                shared_memory_u[0x18 + id*self.shared_memory_size] = int(command['DATA'][id]['STAGE']) << 16 | 0
+                                shared_memory_u[0x18 + id*self.shared_memory_size] = int(command['STAGE']) << 16 | 0
                                 status = 0
-                            elif command['DATA'][id]['STATUS'] == 'Stop':
+                            elif command['STATUS'] == 'Stop':
                                 temp_thread.temp_control_start = False
-                                shared_memory_u[0x18 + id*self.shared_memory_size] = int(command['DATA'][id]['STAGE']) << 16 | 0
+                                shared_memory_u[0x18 + id*self.shared_memory_size] = int(command['STAGE']) << 16 | 0
                                 status = 1
-                            elif command['DATA'][id]['STATUS'] == 'Run':
+                            elif command['STATUS'] == 'Run':
                                 if not temp_thread.temp_control_start:      #기존 동작하지 않고 있으면 동작 함.
                                     if len(temp_thread.ref_datas) > 0:
                                         ref_command = temp_thread.ref_datas.pop(0)
@@ -918,9 +915,9 @@ class UnitBoard:
                                     temp_thread.file_write_state = True
                                     temp_thread.file_index  += 1
                                     event.set()
-                                shared_memory_u[0x18 + id*self.shared_memory_size] = int(command['DATA'][id]['STAGE']) << 16 | 0
+                                shared_memory_u[0x18 + id*self.shared_memory_size] = int(command['STAGE']) << 16 | 0
                                 status = 2
-                            elif command['DATA'][id]['STATUS'] == 'Pause':
+                            elif command['STATUS'] == 'Pause':
                                 if temp_thread.temp_control_start:      #기존 온도 쓰레드가 끝나지 않으면 강제 종료
                                     temp_thread.temp_control_start = False
                                     time.sleep(5)                       #PID 쓰레드는 5초 단위로 동작하므로 기존 쓰레드가 끝날 때 까지 5초 대기
@@ -936,28 +933,28 @@ class UnitBoard:
                                     event.set()
                                 else:
                                     logging.error(f'id: {id} reference data is empty or pause')
-                                shared_memory_u[0x18 + id*self.shared_memory_size] = int(command['DATA'][id]['STAGE']) << 16 | 0
+                                shared_memory_u[0x18 + id*self.shared_memory_size] = int(command['STAGE']) << 16 | 0
                                 status = 3
-                            elif command['DATA'][id]['STATUS'] == 'Initial':
+                            elif command['STATUS'] == 'Initial':
                                 temp_thread.temp_control_start = False
                                 temp_thread.file_index = 0
                                 temp_thread.ref_datas.clear()
                                 temp_thread.dir_data_name = f"/home/pi/Projects/cosmo-m/data/{datetime.datetime.now().strftime('%y%m%d_%H%M%S')}"
-                                shared_memory_u[0x18 + id*self.shared_memory_size] = int(command['DATA'][id]['STAGE']) << 16 | 0
+                                shared_memory_u[0x18 + id*self.shared_memory_size] = int(command['STAGE']) << 16 | 0
                                 logging.info(f'id: {id} reference data status is  Initial')
                                 status = 4
-                            elif command['DATA'][id]['STATUS'] == 'Error':
+                            elif command['STATUS'] == 'Error':
                                 temp_thread.temp_control_start = False
-                                shared_memory_u[0x18 + id*self.shared_memory_size] = int(command['DATA'][id]['STAGE']) << 16 | 0
+                                shared_memory_u[0x18 + id*self.shared_memory_size] = int(command['STAGE']) << 16 | 0
                                 status = 5
                             else:
                                 status = 10
-                            shared_memory_u[0x18 + id*self.shared_memory_size] = int(command['DATA'][id]['STAGE']) << 16 | status
+                            shared_memory_u[0x18 + id*self.shared_memory_size] = int(command['STAGE']) << 16 | status
                             
-                            if command['DATA'][id]['STATUS'] == 'Run' and int(command['DATA'][id]['STAGE']) != old_stage:
+                            if command['STATUS'] == 'Run' and int(command['STAGE']) != old_stage:
                                 shared_memory_u[0x17 + id*self.shared_memory_size] = 0
-                            old_stage = int(command['DATA'][id]['STAGE'])
-                            self.unit_semaphor.release()
+                            old_stage = int(command['STAGE'])
+                            unit_semaphor.release()
                     elif command['CMD'] == 'GET_ADC':
                         if int(self.config['ADDRESS']) != 999:
                             data = [ConstDefine.GET_ADC_COMMAND]
@@ -990,20 +987,7 @@ class UnitBoard:
                 
                             self.can_fd_transmitte_queue.put(message) 
                     elif command['CMD'] == 'GET_STATUS':    # 2025.12.09 - @K2H CAN FD 멀티 마스터 구현으로 여기 호출 안됨
-                        if int(self.config['ADDRESS']) != 999:
-                            # 온도계산 전에 GET_ADC를 호출 함. --> 명령어를 통합하여 ADC 값까지 GET_STATUS에서 읽어 옴.
-                            data = [ConstDefine.GET_STATUS_COMMAND]
-                            crc = self.crc16(data)
-                            # CRC16 2byte를 Little Endian으로 배열 뒤에 추가
-                            data.append(crc & 0xFF)
-                            data.append((crc >> 8) & 0xFF)
-                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = True,
-                                        data=bytearray(data))   # message.data가 최대 길이 넘지 않게 조정 (CAN FD 사용시 유동적일 수 있음)
-
-                            while not can_fd_receive_queue.empty():
-                                can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
-                            
-                            self.can_fd_transmitte_queue.put(message) 
+                        pass
                     elif command['CMD'] == 'START_TEMP':
                         if int(self.config['ADDRESS']) != 999:
                             event.set()
@@ -1046,7 +1030,7 @@ class UnitBoard:
                             # 물탱크 유닛보드에 칠러 모터 제어 명령어 전송 후, TEMP_VALVE 명령어 전송
                             max_unitboard = int(self.common_config['MAXUNITBOARD'])
                             shared_mem_size = int(self.common_config['SHARED_MEMORY_SIZE'])
-                            self.unit_semaphor.acquire()
+                            unit_semaphor.acquire()
                             # 탱크 종류 0 = 사용하지 않음, 1: 발효, 2: 제성, 3: 숙성, 4: 제품, 5: 냉각수, 6: 물, 7: 밑술, 8: 펌프, 9:기타
                             if int(self.config['TANK_TYPE']) == 1:
                                 data = shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER1_MOTOR]
@@ -1062,7 +1046,7 @@ class UnitBoard:
                                 else:
                                     data = data & ~(1 << id)
                                 shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER2_MOTOR] = data
-                            self.unit_semaphor.release()
+                            unit_semaphor.release()
                             time.sleep(0.05)     #여유 시간
                             # 물탱크 유닛보드에 칠러 모터 제어 명령어 전송 끝
                                        
@@ -1081,7 +1065,7 @@ class UnitBoard:
                             # 물탱크 유닛보드에 모터 제어 명령어 전송 후, WEIGHT_VALVE 명령어 전송
                             max_unitboard = int(self.common_config['MAXUNITBOARD'])
                             shared_mem_size = int(self.common_config['SHARED_MEMORY_SIZE'])
-                            self.unit_semaphor.acquire()
+                            unit_semaphor.acquire()
                             # 탱크 종류 0 = 사용하지 않음, 1: 발효, 2: 제성, 3: 숙성, 4: 제품, 5: 냉각수, 6: 물, 7: 밑술, 8: 펌프, 9:기타                      
                             data = shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR]
                             
@@ -1091,7 +1075,7 @@ class UnitBoard:
                                 data = data & ~(1 << id)
                             
                             shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR] = data
-                            self.unit_semaphor.release()
+                            unit_semaphor.release()
                             time.sleep(0.05)     #여유 시간
                             # 물탱크 유닛보드에 모터 제어 명령어 전송 끝
                             
