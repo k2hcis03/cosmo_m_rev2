@@ -212,7 +212,7 @@ class UnitBoardCanFdReceive(threading.Thread):
                         if message.data[1] == 1:            # 1 : 정상, 0 : 오류
                             self.logging.info(f'id: {id} Received message: SET_GPIO_COMMAND')                                 
                         else:
-                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'), block=False)
+                            # self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'), block=False)
                             self.logging.warning(f'id: {id} unit board SET_GPIO_COMMAND is wrong response') 
                     elif message.data[0] == ConstDefine.SET_MOTOR_COMMAND:
                         if message.data[1] == 1:            # 1 : 정상, 0 : 오류
@@ -223,18 +223,18 @@ class UnitBoardCanFdReceive(threading.Thread):
                         if message.data[1] == 1:            # 1 : 정상, 0 : 오류
                             self.logging.info(f'id: {id} Received message: TEMP_RPM_COMMAND')  
                         else:
-                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'), block=False)
+                            # self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'), block=False)
                             self.logging.warning(f'id: {id} unit board TEMP_RPM_COMMAND is wrong response')
                     elif message.data[0] == ConstDefine.TEMP_VALVE_COMMAND:
                         if message.data[1] == 1:            # 1 : 정상, 0 : 오류
                             self.logging.info(f'id: {id} Received message: TEMP_VALVE_COMMAND')                               
                         else:
-                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'), block=False)
+                            # self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'), block=False)
                             self.logging.warning(f'id: {id} unit board TEMP_VALVE_COMMAND is wrong response') 
                     elif message.data[0] == ConstDefine.WEIGHT_VALVE_COMMAND:
                         if message.data[1] == 1:            # 1 : 정상, 0 : 오류
                             self.logging.info(f'id: {id} Received message: WEIGHT_VALVE_COMMAND')
-                            self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":f"success!"}), 'UTF-8'), block=False)
+                            # self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":f"success!"}), 'UTF-8'), block=False)
                         else:
                             self.logging.warning(f'id: {id} unit board WEIGHT_VALVE_COMMAND is wrong response') 
                     elif message.data[0] == ConstDefine.GET_VERSION_COMMAND:
@@ -1098,7 +1098,7 @@ class UnitBoard:
                             self.can_fd_transmitte_queue.put(message) 
                     elif command['CMD'] == 'CTRL':
                         if int(self.config['TANK_ID']) == int(command['TANK_ID']) and int(self.config['ADDRESS']) != 999:
-                            if command['CTRL'][0]['SENSOR_ID'] == '500':    #밸브는 4개 밸브 아이디는 500부터 시작 500-> 냉각
+                            if command['CTRL'][0]['SENSOR_ID'] == '1500':    #밸브는 4개 밸브 아이디는 500부터 시작 1500-> 냉각
                                 x = self.config["SOLVALVE2"]                #밸브 I/O 번호
                                 if command['CTRL'][0]['PARAM0'] == 'ON':
                                     value = ON
@@ -1109,7 +1109,7 @@ class UnitBoard:
                                             "CHANNEL": x,
                                             "VALUE" : value}
                                 command_queue.put(message, block=False) 
-                            elif command['CTRL'][0]['SENSOR_ID'] == '501':  #밸브는 4개 밸브 아이디는 500부터 시작 501-> 워터
+                            elif command['CTRL'][0]['SENSOR_ID'] == '1501':  #밸브는 4개 밸브 아이디는 500부터 시작 1501-> 워터
                                 x = self.config["SOLVALVE1"]                #밸브 I/O 번호
                                 if command['CTRL'][0]['PARAM0'] == 'ON':
                                     value = ON
@@ -1129,11 +1129,11 @@ class UnitBoard:
                                 can_fd_receive_thread.water_motor_on_time = current_time  # UnitBoardCanFdReceive에 최신 시간 값 전달
                                 can_fd_receive_thread.water_motor_on = True
                                 Timer(ontime, self.timer_callback, args=(id, shared_memory_u, unit_semaphor, can_fd_receive_thread)).start()
-                            elif command['CTRL'][0]['SENSOR_ID'] == '502':
+                            elif command['CTRL'][0]['SENSOR_ID'] == '1502':
                                 pass
-                            elif command['CTRL'][0]['SENSOR_ID'] == '503':
+                            elif command['CTRL'][0]['SENSOR_ID'] == '1503':
                                 pass
-                            elif command['CTRL'][0]['SENSOR_ID'] == '600':     #모터 1개 모터 아이디는 600부터 시작
+                            elif command['CTRL'][0]['SENSOR_ID'] == '1600':     #모터 1개 모터 아이디는 600부터 시작
                                 rpm = int(command['CTRL'][0]['PARAM0'])
                                 run_time = int(command['CTRL'][0]['PARAM1'])
                                 message = {"UNIT_ID" : id,                  

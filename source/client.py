@@ -229,16 +229,15 @@ class UnitBoardGetStatus(threading.Thread):
                         if mem_idx < len(self.shared_memory):
                             self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1600+x}","VALUE":f"{self.shared_memory[mem_idx]*1:0.2F}"}) # 모터 속도는 유닛보드에서 *1000을 안함(오버플로우우)
                     
-                    for x in range(int(unit_config.get('PH_NUM', 0))):
-                        mem_idx = base_index + ph_index[x]          #ph 값이 저장되는 shared_memory 위치는 ADC_NUM과 상관없이 1개이기 때문에 x가 0이여도 됨.
-                        if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1700+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
-                    
                     for x in range(int(unit_config.get('BRIX_NUM', 0))):
                         mem_idx = base_index + brix_index[x]          #brix 값이 저장되는 shared_memory 위치는 ADC_NUM과 상관없이 1개이기 때문에 x가 0이여도 됨.
                         if mem_idx < len(self.shared_memory):
                             self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1700+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
 
+                    for x in range(int(unit_config.get('PH_NUM', 0))):
+                        mem_idx = base_index + ph_index[x]          #ph 값이 저장되는 shared_memory 위치는 ADC_NUM과 상관없이 1개이기 때문에 x가 0이여도 됨.
+                        if mem_idx < len(self.shared_memory):
+                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1800+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     # 유량센서 전송 기능
                     x_index = 0
                     for x in range(int(unit_config.get('ADC_NUM', 0))):
