@@ -17,4 +17,3 @@ rot_file_hander = RotatingFileHandler(path, mode='a', maxBytes=1048576, backupCo
 formatter = logging.Formatter('[%(levelname)s] :: %(asctime)s :: %(module)s ::%(name)s ::%(message)s\n')
 rot_file_hander.setFormatter(formatter)
 logger.addHandler(rot_file_hander)
-# logger.debug('202002')

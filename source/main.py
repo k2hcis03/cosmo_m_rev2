@@ -249,7 +249,7 @@ def main():
     config_file = configparser.ConfigParser()  ## 클래스 객체 생성
     config_file.read('/home/pi/Projects/cosmo-m/config/config.ini')  ## 파일 읽기
     common_config = config_file['common']
-    
+
     tcp_queue = queue.Queue(maxsize=8192)
     main_func = CosmoMain(tcp_queue, config_file)
 
@@ -303,10 +303,10 @@ def main():
             with ProcessPoolExecutor(max_workers=32) as executor:
                 unit_func = unit_board(can_fd_transmitte.queue, socket_send_queue, GPIOADDR1, GPIOADDR2, i2c_semaphor, status_control_queue)
                 
-                furtures = {executor.submit(unit_func.unit_process, i, shm.name, main_func.unit_np_shm, 
+                furtures = {executor.submit(unit_func.unit_process, i, shm.name, main_func.unit_np_shm,
                                             main_func.unit_semaphor, can_fd_receive.receive_queue[i],
                                             main_func.command_queue[i], logging) : i for i in range(MAXUNITBOARD)}
-                for furture in as_completed(furtures):  
+                for furture in as_completed(furtures):
                     print("All Process is done")
                 sys.exit(1)
             # else:

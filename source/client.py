@@ -806,7 +806,7 @@ class TcpClientThread(threading.Thread):
                                     self.logging.error('Too many errors, reconnecting')
                                     raise socket.error('Too many errors')
                         else:
-                            self.logging.debug("Data receive timeout, retrying...")
+                            self.logging.debug("Socket Data receive timeout, retrying...")
                             continue
                         
             except socket.timeout:

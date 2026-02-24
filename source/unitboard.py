@@ -170,7 +170,7 @@ class UnitBoardCanFdReceive(threading.Thread):
                             self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_INVERTER_STATUS + id*self.shared_memory_size] = (np.int32)(message.data[30])    #inverter 상태
                             self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ERROR_CODE + id*self.shared_memory_size] = (np.int32)(message.data[45])    #error code
                             
-                            # 유닛보드에서 물탱크 무게가 되거나 시간이 되서 모터 상태 값을 변경하면 모터 제어 처리함.
+                            # 유닛보드에서 물탱크 무게가 되거나 시간이 되서 모터 상태 값을 변경하면 모터 제어 처리함. 3.0은 동작 시간 확보
                             if self.water_motor_on_time + 3.0 < time.time() and self.water_motor_on == True:
                                 max_unitboard = int(self.common_config['MAXUNITBOARD'])
                                 # 탱크 종류 0 = 사용하지 않음, 1: 발효, 2: 제성, 3: 숙성, 4: 제품, 5: 냉각수, 6: 물, 7: 밑술, 8: 펌프, 9:기타                      
@@ -840,7 +840,9 @@ class UnitBoard:
                 self.i2c_semaphor.acquire()
                 i2cbus = smbus.SMBus(1)
                 try:
-                    led = int(command['UNIT_ID']) -1
+                    # led = int(self.config['ADDRESS']) 로 수정해야 됨. 아래 코드를 테스트 필요요
+                    # led = int(command['UNIT_ID']) -1
+                    led = int(self.config['ADDRESS'])
                     i2cbus.write_byte_data(self.GPIOADDR1, 0x12, 0xFF)
                     i2cbus.write_byte_data(self.GPIOADDR1, 0x13, 0xFF)
                     i2cbus.write_byte_data(self.GPIOADDR2, 0x12, 0xFF)
