@@ -32,7 +32,7 @@ OFF = 0
 #
 class UnitBoardCanFdReceive(threading.Thread):
     def __init__(self, id, logging, can_fd_receive_queue, shared_memory_u, shared_memory_size, unit_semaphor, 
-        config, socket_send_queue, status_control_queue, unit_board_instance, common_config):
+        config, socket_send_queue, status_control_queue, unit_board_instance, common_config, command_queue):
         threading.Thread.__init__(self)
         self.daemon = True
         self.id = id                            # id는 0부터 시작
@@ -43,6 +43,7 @@ class UnitBoardCanFdReceive(threading.Thread):
         self.unit_semaphor = unit_semaphor
         self.config = config
         self.socket_send_queue = socket_send_queue
+        self.command_queue = command_queue
         self.status_control_queue = status_control_queue
         self.unit_board_instance = unit_board_instance  # UnitBoard 인스턴스 참조 저장
         self.common_config = common_config
@@ -300,6 +301,10 @@ class UnitBoardCanFdReceive(threading.Thread):
                             self.socket_send_queue.put(ack_msg, block=False)
                             self.logging.warning(f'id: {id} unit board BOOT_UNIT_BOARD_COMMAND is wrong response') 
                         self.unit_board_instance.unit_board_initialize(id, self.logging)
+                    # LED를 
+                    message = {"UNIT_ID" : id,                  
+                                "CMD":"LED_STATUS"}
+                    self.command_queue.put(message, block=False) 
                 else:
                     self.logging.warning(f'id: {id} unit board is not response')    
             except Exception as e:
@@ -808,7 +813,7 @@ class UnitBoard:
             can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
 
         can_fd_receive_thread = UnitBoardCanFdReceive(id, logging, can_fd_receive_queue, shared_memory_u, self.shared_memory_size, unit_semaphor, 
-            self.config, self.socket_send_queue, self.status_control_queue, self, self.common_config)
+            self.config, self.socket_send_queue, self.status_control_queue, self, self.common_config, command_queue)
         can_fd_receive_thread.start()
         self.unit_board_initialize(id, logging)
         # 물탱크 유닛보드이면 물탱크 무게 측정 쓰레드 생성
