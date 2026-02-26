@@ -43,6 +43,7 @@ class UnitBoardGetStatus(threading.Thread):
         
         # Config 파일 읽기 with 예외 처리
         self.config_file = configparser.ConfigParser()
+        self.canfd_communication_error_cnt = [0 for _ in range(self.max_unit_board)]
         try:
             config_result = self.config_file.read('/home/pi/Projects/cosmo-m/config/config.ini')
             if not config_result:
@@ -139,6 +140,7 @@ class UnitBoardGetStatus(threading.Thread):
                 "TIME":f"{time.strftime('%H:%M:%S')}",
                 "VALUES":[],
                 "STATE":[],
+                "ERROR":[],
                 # "CODE":{"CODE":1000,"MSG":"OK"}
             }
             temp_index = [ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP1, 
@@ -181,6 +183,7 @@ class UnitBoardGetStatus(threading.Thread):
                         ConstDefine.SHARED_MEMORY_OFFSET_ADC6,
                         ConstDefine.SHARED_MEMORY_OFFSET_ADC7,
                         ConstDefine.SHARED_MEMORY_OFFSET_ADC8]           #CT 값이 저장되는 shared_memory 위치 
+            error_index = [ConstDefine.SHARED_MEMORY_OFFSET_ERROR_CODE]           #Error 값이 저장되는 shared_memory 위치 
             self.order += 1
 
             for i in range(int(common_config['MAXUNITBOARD'])):
@@ -247,7 +250,7 @@ class UnitBoardGetStatus(threading.Thread):
                             self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{2000+x_index}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                             x_index += 1
 
-                    # CT 센서 전송 기능  김휴정 박사와 협의 필요
+                    # CT 센서 전송 기능  센서 번호 김휴정 박사와 협의 필요 
                     for x in range(int(unit_config.get('ADC_NUM', 0))):
                         mem_idx = base_index + ct_index[x]
                         adc_usage = int(unit_config.get(f'ADC_{x+1}', 0))
@@ -260,6 +263,19 @@ class UnitBoardGetStatus(threading.Thread):
                         elif adc_usage == 10 and mem_idx < len(self.shared_memory):
                             self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{2104}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     
+                    # Error 정보 추가
+                    mem_idx = base_index + error_index[0]
+                    
+                    if mem_idx < len(self.shared_memory):
+                        if self.shared_memory[mem_idx] == ConstDefine.ERROR_CODE_COMMUNICATION:  # 통신에러 코드는 10으로 전송
+                            self.canfd_communication_error_cnt[i] += 1
+                            if self.canfd_communication_error_cnt[i] >= 10:   # 10번 연속 통신에러 발생 시 통신에러 코드 전송
+                                self.send_data['ERROR'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","CODE":f"10"})
+                                self.canfd_communication_error_cnt[i] = 0
+                            else:
+                                self.send_data['ERROR'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","CODE":f"{self.shared_memory[mem_idx]}"})
+                        else:   # 나머지 에러 코드는 그대로 전송    
+                            self.send_data['ERROR'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","CODE":f"{self.shared_memory[mem_idx]}"})
                     # State 정보 추가
                     status_idx = base_index + 0x18
                     index_idx = base_index + 0x17

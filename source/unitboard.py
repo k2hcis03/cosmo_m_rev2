@@ -55,6 +55,11 @@ class UnitBoardCanFdReceive(threading.Thread):
         while True:
             try:
                 time.sleep(0.10)
+                #통신이 되고 있다는 것을 공유메모리에 저장하기 위해 세마포어 획득하고 통신에러 코드 저장 (whilw문이 동작하면 에러 코드는 클리어 됨)
+                self.unit_semaphor.acquire()
+                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ERROR_CODE + self.id*self.shared_memory_size] = ConstDefine.ERROR_CODE_COMMUNICATION # 10이면 통신에러 
+                self.unit_semaphor.release()
+
                 while message := self.can_fd_receive_queue.get():
                     id = message.arbitration_id - 0x100
                     if message.data[0] == ConstDefine.SET_CONFIG_COMMAND:
@@ -810,7 +815,7 @@ class UnitBoard:
                                                            shared_memory_u, unit_semaphor, self.config, self.shared_memory_size, self.dir_name, self.common_config)
         temp_thread.start()
         while not can_fd_receive_queue.empty():
-            can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
+            can_fd_receive_queue.get()                  # as docs say: Remove and return an item from the queue.
 
         can_fd_receive_thread = UnitBoardCanFdReceive(id, logging, can_fd_receive_queue, shared_memory_u, self.shared_memory_size, unit_semaphor, 
             self.config, self.socket_send_queue, self.status_control_queue, self, self.common_config, command_queue)
@@ -828,7 +833,7 @@ class UnitBoard:
                 global command
                 command = command_queue.get()
                 
-                if  command['CMD'] != 'GET_STATUS' and command['CMD'] != 'PING':         # GET_STATUS는 계속 호출 되므로 log에 출력 하지 않음.
+                if  command['CMD'] != 'GET_STATUS' and command['CMD'] != 'PING' and command['CMD'] != 'LED_STATUS':         # GET_STATUS는 계속 호출 되므로 log에 출력 하지 않음.
                     if command['CMD'] == 'REF':
                         logging.info(f"{command['CMD']} command is inserted to {id} Unit Board")
                     elif command['CMD'] == 'STATE':
