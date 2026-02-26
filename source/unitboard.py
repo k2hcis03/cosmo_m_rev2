@@ -345,7 +345,7 @@ class UnitBoardWaterWeight(threading.Thread):
                 self.unit_semaphor.release()
                 # 물탱크 모터 제어 명령어 전송
                 if water_motor:
-                    self.logging.info(f'id: {self.id} water motor is on')
+                    # self.logging.info(f'id: {self.id} water motor is on')
                     self.gpio_value[int(self.config['SOLVALVE1'])] = True
                 else:
                     self.gpio_value[int(self.config['SOLVALVE1'])] = False
@@ -366,6 +366,7 @@ class UnitBoardWaterWeight(threading.Thread):
                     self.gpio_value[int(self.config['SOLVALVE3'])] = False
 
                 if self.gpio_value != self.gpio_value_old:
+                    self.logging.info(f'id: {self.id} weight_valve gpio value is changed')
                     message = {"UNIT_ID" : self.id,                  
                     "CMD":"SET_GPIO",
                     "VALUE" : self.gpio_value}
@@ -774,7 +775,7 @@ class UnitBoard:
                     crc >>= 1
         return crc
 
-    # WEIGHT_VALVE 타이머 콜백 함수  모터 구동 시간 후, 모터 정지 처리
+    # WEIGHT_VALVE 타이머 콜백 함수  물 모터 구동 시간 후, 물 모터 정지 처리
     def timer_callback(self, id, shared_memory_u, unit_semaphor, can_fd_receive_thread):
         max_unitboard = int(self.common_config['MAXUNITBOARD'])
         shared_mem_size = int(self.common_config['SHARED_MEMORY_SIZE'])
@@ -1108,9 +1109,15 @@ class UnitBoard:
                             message = can.Message(is_extended_id=False, is_fd = True, bitrate_switch = True, arbitration_id=id,  
                                         data=bytearray(data))                           
                             self.can_fd_transmitte_queue.put(message) 
+                            ontime = int(command['ONTIME'])          # ONTIME은 초 단위로 전송
+                            current_time = time.time()
+                            can_fd_receive_thread.water_motor_on_time = current_time  # UnitBoardCanFdReceive에 최신 시간 값 전달
+                            can_fd_receive_thread.water_motor_on = True
+                            # 유닛보드로 명령어 보내고 물 흐르는 시간 후, 타이머에서 물 모터를 사용하기 위해 타이머 발생
+                            Timer(ontime, self.timer_callback, args=(id, shared_memory_u, unit_semaphor, can_fd_receive_thread)).start()
                     elif command['CMD'] == 'CTRL':
                         if int(self.config['TANK_ID']) == int(command['TANK_ID']) and int(self.config['ADDRESS']) != 999:
-                            if command['CTRL'][0]['SENSOR_ID'] == '1500':    #밸브는 4개 밸브 아이디는 500부터 시작 1500-> 냉각
+                            if command['CTRL'][0]['SENSOR_ID'] == '1500':    #밸브는 4개 밸브 아이디는 1500부터 시작 1500-> 냉각
                                 x = self.config["SOLVALVE2"]                #밸브 I/O 번호
                                 if command['CTRL'][0]['PARAM0'] == 'ON':
                                     value = ON
@@ -1121,7 +1128,7 @@ class UnitBoard:
                                             "CHANNEL": x,
                                             "VALUE" : value}
                                 command_queue.put(message, block=False) 
-                            elif command['CTRL'][0]['SENSOR_ID'] == '1501':  #밸브는 4개 밸브 아이디는 500부터 시작 1501-> 워터
+                            elif command['CTRL'][0]['SENSOR_ID'] == '1501':  #밸브는 4개 밸브 아이디는 1500부터 시작 1501-> 워터
                                 x = self.config["SOLVALVE1"]                #밸브 I/O 번호
                                 if command['CTRL'][0]['PARAM0'] == 'ON':
                                     value = ON
@@ -1137,10 +1144,6 @@ class UnitBoard:
                                             "WEIGHT" : temp, 
                                             "ONTIME" : ontime}
                                 command_queue.put(message, block=False)
-                                current_time = time.time()
-                                can_fd_receive_thread.water_motor_on_time = current_time  # UnitBoardCanFdReceive에 최신 시간 값 전달
-                                can_fd_receive_thread.water_motor_on = True
-                                Timer(ontime, self.timer_callback, args=(id, shared_memory_u, unit_semaphor, can_fd_receive_thread)).start()
                             elif command['CTRL'][0]['SENSOR_ID'] == '1502':
                                 pass
                             elif command['CTRL'][0]['SENSOR_ID'] == '1503':

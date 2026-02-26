@@ -207,6 +207,16 @@ class CosmoMain(threading.Thread):
                         matching = True
                 if not matching:
                     logging.info(f"Wrong Unit board id{message['UNIT_ID']}")
+            elif message['CMD'] == 'WEIGHT_VALVE':
+                matching = False
+                for x in range(MAXUNITBOARD):
+                    config = self.common_config[f'unit_board{x}']
+                    if self.find_tank_id_to_unit_id(message['UNIT_ID'], config):
+                        message['UNIT_ID'] = x
+                        self.command_queue[x].put(message, block=False)
+                        matching = True
+                if not matching:
+                    logging.info(f"Wrong Unit board id{message['UNIT_ID']}")
             elif message['CMD'] == 'CTRL':
                 matching = False
                 for x in range(MAXUNITBOARD):

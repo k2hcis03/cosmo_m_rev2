@@ -197,7 +197,7 @@ class UnitBoardGetStatus(threading.Thread):
                     if base_index >= len(self.shared_memory):
                         self.logging.warning(f'Shared memory index out of range for FERMEN_TANK {i}')
                         continue
-                    # config.ini에서 ADC usage 설정에 따라 온도 센서 또는 유량센서 전송 기능 필요.
+                    # config.ini에서 ADC usage 설정에 따라 온도 센서 또는 유량센서 전송 기능 필요. 모두 온도 센서로 값을 채우고 아래에서 유량센서, CT 전송 기능 추가.
                     x_index = 0
                     for x in range(int(unit_config.get('ADC_NUM', 0))):
                         mem_idx = base_index + temp_index[x]
