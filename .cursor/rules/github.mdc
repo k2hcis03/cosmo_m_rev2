@@ -1,6 +1,8 @@
 ---
+description: 
 alwaysApply: true
 ---
+
 # Cosmo-M 프로젝트 규칙
 
 ## 언어 및 커뮤니케이션
@@ -31,4 +33,3 @@ alwaysApply: true
 - Python 코드는 PEP 8 스타일 가이드를 따릅니다.
 - 변수명과 함수명은 snake_case를 사용합니다.
 - 클래스명은 PascalCase를 사용합니다.
-
