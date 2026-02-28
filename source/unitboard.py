@@ -174,7 +174,7 @@ class UnitBoardCanFdReceive(threading.Thread):
                             self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_GPI0_7 + id*self.shared_memory_size] = (np.int32)(message.data[29])    #GPI 7~0
                             
                             self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_INVERTER_STATUS + id*self.shared_memory_size] = (np.int32)(message.data[30])    #inverter 상태
-                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ERROR_CODE + id*self.shared_memory_size] = (np.int32)(message.data[45])    #error code
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ERROR_CODE + id*self.shared_memory_size] = (np.int32)(message.data[45])    #error code 그리고 통신에러 클리어
                             
                             # 유닛보드에서 물탱크 무게가 되거나 시간이 되서 모터 상태 값을 변경하면 모터 제어 처리함. 3.0은 동작 시간 확보
                             if self.water_motor_on_time + 3.0 < time.time() and self.water_motor_on == True:

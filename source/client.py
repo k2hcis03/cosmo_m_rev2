@@ -200,68 +200,65 @@ class UnitBoardGetStatus(threading.Thread):
                     # config.ini에서 ADC usage 설정에 따라 온도 센서 또는 유량센서 전송 기능 필요. 모두 온도 센서로 값을 채우고 아래에서 유량센서, CT 전송 기능 추가.
                     x_index = 0
                     for x in range(int(unit_config.get('ADC_NUM', 0))):
-                        mem_idx = base_index + temp_index[x]
-                        adc_usage = int(unit_config.get(f'ADC_{x+1}', 0))
-                        if adc_usage == 1 and mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1100+x_index}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
-                            x_index += 1
+                        if x < len(temp_index):
+                            mem_idx = base_index + temp_index[x]
+                            adc_usage = int(unit_config.get(f'ADC_{x+1}', 0))
+                            if adc_usage == 1 and mem_idx < len(self.shared_memory):
+                                self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1100+x_index}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
+                                x_index += 1
 
                     for x in range(int(unit_config.get('HUMI_NUM', 0))):
-                        mem_idx = base_index + humi_index[x]
-                        if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1200+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
+                        if x < len(humi_index):
+                            mem_idx = base_index + humi_index[x]
+                            if mem_idx < len(self.shared_memory):
+                                self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1200+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     
                     for x in range(int(unit_config.get('CO2_NUM', 0))):
-                        mem_idx = base_index + co2_index[x]
-                        if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1300+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
-                    
-                    for x in range(int(unit_config.get('LOAD_CELL', 0))):
-                        mem_idx = base_index + loadcell_index[x]        #11
-                        if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1400+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
-                    
-                    for x in range(int(unit_config.get('VALVE_NUM', 0))):
-                        mem_idx = base_index + gpo_index[x]     #여기에 GPO 8개 정보가 모두 있음.
-                        if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1500+x}","VALUE":                   # 상단, 하단 솔밸브
-                                f"{(self.shared_memory[mem_idx] >> x) & 0x00000001}"})
+                        if x < len(co2_index):
+                            mem_idx = base_index + co2_index[x]
+                            if mem_idx < len(self.shared_memory):
+                                self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1300+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     
                     for x in range(int(unit_config.get('MOTOR_NUM', 0))): 
-                        mem_idx = base_index + motor_index[x]
-                        if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1600+x}","VALUE":f"{self.shared_memory[mem_idx]*1:0.2F}"}) # 모터 속도는 유닛보드에서 *1000을 안함(오버플로우우)
+                        if x < len(motor_index):
+                            mem_idx = base_index + motor_index[x]
+                            if mem_idx < len(self.shared_memory):
+                                self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1600+x}","VALUE":f"{self.shared_memory[mem_idx]*1:0.2F}"}) # 모터 속도는 유닛보드에서 *1000을 안함(오버플로우우)
                   
                     for x in range(int(unit_config.get('BRIX_NUM', 0))):
-                        mem_idx = base_index + brix_index[x]          #brix 값이 저장되는 shared_memory 위치는 ADC_NUM과 상관없이 1개이기 때문에 x가 0이여도 됨.
-                        if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1700+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
+                        if x < len(brix_index):
+                            mem_idx = base_index + brix_index[x]          #brix 값이 저장되는 shared_memory 위치는 ADC_NUM과 상관없이 1개이기 때문에 x가 0이여도 됨.
+                            if mem_idx < len(self.shared_memory):
+                                self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1700+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
 
                     for x in range(int(unit_config.get('PH_NUM', 0))):
-                        mem_idx = base_index + ph_index[x]          #ph 값이 저장되는 shared_memory 위치는 ADC_NUM과 상관없이 1개이기 때문에 x가 0이여도 됨.
-                        if mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1800+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
+                        if x < len(ph_index):
+                            mem_idx = base_index + ph_index[x]          #ph 값이 저장되는 shared_memory 위치는 ADC_NUM과 상관없이 1개이기 때문에 x가 0이여도 됨.
+                            if mem_idx < len(self.shared_memory):
+                                self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1800+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     # 유량센서 전송 기능
                     x_index = 0
                     for x in range(int(unit_config.get('ADC_NUM', 0))):
-                        mem_idx = base_index + flow_index[0]          #flow 값이 저장되는 shared_memory 위치는 ADC_NUM과 상관없이 1개
-                        adc_usage = int(unit_config.get(f'ADC_{x+1}', 0))
-                        if adc_usage == 2 and mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{2000+x_index}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
-                            x_index += 1
+                        if x < len(flow_index):
+                            mem_idx = base_index + flow_index[0]          #flow 값이 저장되는 shared_memory 위치는 ADC_NUM과 상관없이 1개
+                            adc_usage = int(unit_config.get(f'ADC_{x+1}', 0))
+                            if adc_usage == 2 and mem_idx < len(self.shared_memory):
+                                self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{2000+x_index}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
+                                x_index += 1
 
                     # CT 센서 전송 기능  센서 번호 김휴정 박사와 협의 필요 
                     for x in range(int(unit_config.get('ADC_NUM', 0))):
-                        mem_idx = base_index + ct_index[x]
-                        adc_usage = int(unit_config.get(f'ADC_{x+1}', 0))
-                        if adc_usage == 7 and mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{2101}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
-                        elif adc_usage == 8 and mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{2102}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
-                        elif adc_usage == 9 and mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{2103}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
-                        elif adc_usage == 10 and mem_idx < len(self.shared_memory):
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{2104}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
+                        if x < len(ct_index):
+                            mem_idx = base_index + ct_index[x]
+                            adc_usage = int(unit_config.get(f'ADC_{x+1}', 0))
+                            if adc_usage == 7 and mem_idx < len(self.shared_memory):
+                                self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{2101}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
+                            elif adc_usage == 8 and mem_idx < len(self.shared_memory):
+                                self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{2102}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
+                            elif adc_usage == 9 and mem_idx < len(self.shared_memory):
+                                self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{2103}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
+                            elif adc_usage == 10 and mem_idx < len(self.shared_memory):
+                                self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{2104}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     
                     # Error 정보 추가
                     mem_idx = base_index + error_index[0]
@@ -269,13 +266,12 @@ class UnitBoardGetStatus(threading.Thread):
                     if mem_idx < len(self.shared_memory):
                         if self.shared_memory[mem_idx] == ConstDefine.ERROR_CODE_COMMUNICATION:  # 통신에러 코드는 10으로 전송
                             self.canfd_communication_error_cnt[i] += 1
+                            
                             if self.canfd_communication_error_cnt[i] >= 10:   # 10번 연속 통신에러 발생 시 통신에러 코드 전송
                                 self.send_data['ERROR'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","CODE":f"10"})
-                                self.canfd_communication_error_cnt[i] = 0
-                            else:
-                                self.send_data['ERROR'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","CODE":f"{self.shared_memory[mem_idx]}"})
                         else:   # 나머지 에러 코드는 그대로 전송    
                             self.send_data['ERROR'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","CODE":f"{self.shared_memory[mem_idx]}"})
+                            self.canfd_communication_error_cnt[i] = 0
                     # State 정보 추가
                     status_idx = base_index + 0x18
                     index_idx = base_index + 0x17
