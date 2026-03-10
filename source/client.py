@@ -219,6 +219,12 @@ class UnitBoardGetStatus(threading.Thread):
                             if mem_idx < len(self.shared_memory):
                                 self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1300+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     
+                    for x in range(int(unit_config.get('LOAD_CELL_NUM', 0))):
+                        if x < len(loadcell_index):
+                            mem_idx = base_index + loadcell_index[x]
+                            if mem_idx < len(self.shared_memory):
+                                self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1400+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
+                    
                     for x in range(int(unit_config.get('MOTOR_NUM', 0))): 
                         if x < len(motor_index):
                             mem_idx = base_index + motor_index[x]
