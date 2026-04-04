@@ -170,21 +170,40 @@ class UnitBoardCanFdReceive(threading.Thread):
                             self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC6 + id*self.shared_memory_size] = (np.float32)(message.data[12] << 8 | message.data[13])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
                             self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC7 + id*self.shared_memory_size] = (np.float32)(message.data[14] << 8 | message.data[15])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
                             self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC8 + id*self.shared_memory_size] = (np.float32)(message.data[16] << 8 | message.data[17])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
-                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_GPO0_7 + id*self.shared_memory_size] = (np.int32)(message.data[28])     #GPO 7~0
-                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_GPI0_7 + id*self.shared_memory_size] = (np.int32)(message.data[29])    #GPI 7~0
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_GPO0_7 + id*self.shared_memory_size] = (np.int32)(message.data[28])     #GPO 7~0 GPO 현재 설정 값 (active high)
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_GPI0_7 + id*self.shared_memory_size] = (np.int32)(message.data[29])    #GPI 7~0  엔코더 사용 상태 값 (active low)
                             
                             self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_INVERTER_STATUS + id*self.shared_memory_size] = (np.int32)(message.data[30])    #inverter 상태
                             self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ERROR_CODE + id*self.shared_memory_size] = (np.int32)(message.data[45])    #error code 그리고 통신에러 클리어
                             
-                            # 유닛보드에서 물탱크 무게가 되거나 시간이 되서 모터 상태 값을 변경하면 모터 제어 처리함. 3.0은 동작 시간 확보
+                            # 유닛보드에서 물탱크 무게가 되거나 시간이 되서 모터 상태 값을 변경하면 모터 제어 처리함. 3.0은 동작 시간 확보, 
+                            # 유닛보드에서 물 모터 값을 변경하면 모터 제어 처리함.
                             if self.water_motor_on_time + 3.0 < time.time() and self.water_motor_on == True:
                                 max_unitboard = int(self.common_config['MAXUNITBOARD'])
                                 # 탱크 종류 0 = 사용하지 않음, 1: 발효, 2: 제성, 3: 숙성, 4: 제품, 5: 냉각수, 6: 물, 7: 밑술, 8: 펌프, 9:기타                      
-                                data = self.shared_memory_u[max_unitboard * self.shared_memory_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR]
+                                # data = self.shared_memory_u[max_unitboard * self.shared_memory_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR]
+                                
+                                # 냉각수 선택 0 = 사용하지 않음, 1 = CT water 2 = 칠러1, 3 = 칠러2
+                                # 냉각수 선택은 탱크에 종류에 따라 다름
+                                if int(self.config['FEED_WATER_SELECT']) == 1:
+                                    data = self.shared_memory_u[max_unitboard * self.shared_memory_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR]
+                                elif int(self.config['FEED_WATER_SELECT']) == 2:
+                                    data = self.shared_memory_u[max_unitboard * self.shared_memory_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER1_MOTOR]
+                                elif int(self.config['FEED_WATER_SELECT']) == 3:
+                                    data = self.shared_memory_u[max_unitboard * self.shared_memory_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER2_MOTOR]
+
                                 if (np.int32)(message.data[31]) == OFF:
                                     data = data & ~(1 << id)
                                     self.water_motor_on = False
-                                    self.shared_memory_u[max_unitboard * self.shared_memory_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR] = data
+                                    # self.shared_memory_u[max_unitboard * self.shared_memory_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR] = data
+                                    
+                                    if int(self.config['FEED_WATER_SELECT']) == 1:
+                                        self.shared_memory_u[max_unitboard * self.shared_memory_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR] = data
+                                    elif int(self.config['FEED_WATER_SELECT']) == 2:
+                                        self.shared_memory_u[max_unitboard * self.shared_memory_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER1_MOTOR] = data
+                                    elif int(self.config['FEED_WATER_SELECT']) == 3:
+                                        self.shared_memory_u[max_unitboard * self.shared_memory_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER2_MOTOR] = data
+                                    
                             # shared_memory_u[0x1F + id*self.shared_memory_size] = (np.int32)(message.data[30])    #inverter 상태
                             self.unit_semaphor.release()
                             
@@ -315,7 +334,7 @@ class UnitBoardCanFdReceive(threading.Thread):
             except Exception as e:
                 print(e)
 # 물탱크 유닛보드 일때, 생성되는 쓰레드 #########################
-class UnitBoardWaterWeight(threading.Thread):
+class UnitBoardWaterTank(threading.Thread):
     def __init__(self, id, logging,  shared_memory_u, shared_memory_size, unit_semaphor, config, common_config, command_queue):
         threading.Thread.__init__(self)
         self.daemon = True
@@ -327,7 +346,7 @@ class UnitBoardWaterWeight(threading.Thread):
         self.config = config
         self.common_config = common_config
         self.command_queue = command_queue
-        self.logging.info(f'id: {self.id} UnitBoard WaterWeight Thread Run')
+        self.logging.info(f'id: {self.id} UnitBoard WaterTank Thread Run')
         self.gpio_value = [False, False, False, False, False, False, False, False]
         self.gpio_value_old = [False, False, False, False, False, False, False, False]
 
@@ -373,7 +392,7 @@ class UnitBoardWaterWeight(threading.Thread):
                     self.command_queue.put(message, block=False) 
                 self.gpio_value_old = self.gpio_value.copy()
             except Exception as e:
-                self.logging.error(f'id: {self.id} UnitBoardWaterWeight Thread Error: {e}')
+                self.logging.error(f'id: {self.id} UnitBoardWaterTank Thread Error: {e}')
                 print(e)
 
 #                    
@@ -779,11 +798,30 @@ class UnitBoard:
     def timer_callback(self, id, shared_memory_u, unit_semaphor, can_fd_receive_thread):
         max_unitboard = int(self.common_config['MAXUNITBOARD'])
         shared_mem_size = int(self.common_config['SHARED_MEMORY_SIZE'])
-        data = shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR]
+        # data = shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR]
+        
+        # 냉각수 선택 0 = 사용하지 않음, 1 = CT water 2 = 칠러1, 3 = 칠러2
+        # 냉각수 선택은 탱크에 종류에 따라 다름
+        if int(self.config['FEED_WATER_SELECT']) == 1:
+            data = shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR]
+        elif int(self.config['FEED_WATER_SELECT']) == 2:
+            data = shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER1_MOTOR]
+        elif int(self.config['FEED_WATER_SELECT']) == 3:
+            data = shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER2_MOTOR]
+
         data = data & ~(1 << id)
         can_fd_receive_thread.water_motor_on = False
         unit_semaphor.acquire()
-        shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR] = data
+        
+        # shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR] = data
+        # 냉각수 선택 0 = 사용하지 않음, 1 = CT water 2 = 칠러1, 3 = 칠러2
+        # 냉각수 선택은 탱크에 종류에 따라 다름
+        if int(self.config['FEED_WATER_SELECT']) == 1:
+            shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR] = data
+        elif int(self.config['FEED_WATER_SELECT']) == 2:
+            shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER1_MOTOR] = data
+        elif int(self.config['FEED_WATER_SELECT']) == 3:
+            shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER2_MOTOR] = data
         unit_semaphor.release()
 
     def unit_process(self, n, shm, arr, semaphor, receive_queue, cmd_queue, logging):
@@ -825,9 +863,9 @@ class UnitBoard:
         # 물탱크 유닛보드이면 물탱크 무게 측정 쓰레드 생성
         # 탱크 종류 0 = 사용하지 않음, 1: 발효, 2: 제성, 3: 숙성, 4: 제품, 5: 냉각수, 6: 물, 7: 밑술, 8: 펌프, 9:기타
         if int(self.config['TANK_TYPE']) == 6:
-            water_weight_thread = UnitBoardWaterWeight(id, logging, shared_memory_u, self.shared_memory_size, unit_semaphor, 
+            water_tank_thread = UnitBoardWaterTank(id, logging, shared_memory_u, self.shared_memory_size, unit_semaphor, 
             self.config, self.common_config, command_queue)
-            water_weight_thread.start()
+            water_tank_thread.start()
             logging.info(f'id: {id} UnitBoard WaterWeight Thread Run')
         while True:
             try: 
@@ -1045,14 +1083,38 @@ class UnitBoard:
                             shared_mem_size = int(self.common_config['SHARED_MEMORY_SIZE'])
                             unit_semaphor.acquire()
                             # 탱크 종류 0 = 사용하지 않음, 1: 발효, 2: 제성, 3: 숙성, 4: 제품, 5: 냉각수, 6: 물, 7: 밑술, 8: 펌프, 9:기타
-                            if int(self.config['TANK_TYPE']) == 1:
+                            # if int(self.config['TANK_TYPE']) == 1:
+                            #     data = shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER1_MOTOR]
+                            #     if command['VALUE'] == ON:
+                            #         data = data | (1 << id)
+                            #     else:
+                            #         data = data & ~(1 << id)
+                            #     shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER1_MOTOR] = data
+                            # elif int(self.config['TANK_TYPE']) == 2:
+                            #     data = shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER2_MOTOR]
+                            #     if command['VALUE'] == ON:
+                            #         data = data | (1 << id)
+                            #     else:
+                            #         data = data & ~(1 << id)
+                            #     shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER2_MOTOR] = data
+                            
+                            # 냉각수 선택 0 = 사용하지 않음, 1 = CT water 2 = 칠러1, 3 = 칠러2
+                            # 냉각수 선택은 탱크에 종류에 따라 다름
+                            if int(self.config['CHILER_WATER_SELECT']) == 1:
+                                data = shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR]
+                                if command['VALUE'] == ON:
+                                    data = data | (1 << id)
+                                else:
+                                    data = data & ~(1 << id)
+                                shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER1_MOTOR] = data
+                            elif int(self.config['CHILER_WATER_SELECT']) == 2:
                                 data = shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER1_MOTOR]
                                 if command['VALUE'] == ON:
                                     data = data | (1 << id)
                                 else:
                                     data = data & ~(1 << id)
                                 shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER1_MOTOR] = data
-                            elif int(self.config['TANK_TYPE']) == 2:
+                            elif int(self.config['CHILER_WATER_SELECT']) == 3:
                                 data = shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER2_MOTOR]
                                 if command['VALUE'] == ON:
                                     data = data | (1 << id)
@@ -1080,14 +1142,31 @@ class UnitBoard:
                             shared_mem_size = int(self.common_config['SHARED_MEMORY_SIZE'])
                             unit_semaphor.acquire()
                             # 탱크 종류 0 = 사용하지 않음, 1: 발효, 2: 제성, 3: 숙성, 4: 제품, 5: 냉각수, 6: 물, 7: 밑술, 8: 펌프, 9:기타                      
-                            data = shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR]
-                            
+                            # data = shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR]
+                            # 냉각수 선택 0 = 사용하지 않음, 1 = CT water 2 = 칠러1, 3 = 칠러2
+                            # 냉각수 선택은 탱크에 종류에 따라 다름
+                            if int(self.config['FEED_WATER_SELECT']) == 1:
+                                data = shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR]
+                            elif int(self.config['FEED_WATER_SELECT']) == 2:
+                                data = shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER1_MOTOR]
+                            elif int(self.config['FEED_WATER_SELECT']) == 3:
+                                data = shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER2_MOTOR]
+
                             if command['VALUE'] == ON:
                                 data = data | (1 << id)
                             else:
                                 data = data & ~(1 << id)
                             
-                            shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR] = data
+                            # shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR] = data
+                            # 냉각수 선택 0 = 사용하지 않음, 1 = CT water 2 = 칠러1, 3 = 칠러2
+                            # 냉각수 선택은 탱크에 종류에 따라 다름
+                            if int(self.config['FEED_WATER_SELECT']) == 1:
+                                shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR] = data
+                            elif int(self.config['FEED_WATER_SELECT']) == 2:
+                                shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER1_MOTOR] = data
+                            elif int(self.config['FEED_WATER_SELECT']) == 3:
+                                shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER2_MOTOR] = data
+
                             unit_semaphor.release()
                             time.sleep(0.05)     #여유 시간
                             # 물탱크 유닛보드에 모터 제어 명령어 전송 끝

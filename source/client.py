@@ -225,6 +225,19 @@ class UnitBoardGetStatus(threading.Thread):
                             if mem_idx < len(self.shared_memory):
                                 self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1400+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     
+                    for x in range(int(unit_config.get('VALVE_NUM', 0))):
+                        if x < len(gpo_index):
+                            if int(unit_config.get('ENCODER_USAGE', 0)) == 0:
+                                mem_idx = base_index + gpo_index[0]     #gpo 값이 저장되는 shared_memory 위치는 VALVE_NUM 상관없이 1개
+                                if mem_idx < len(self.shared_memory):
+                                    self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1500+x}","VALUE":                   # 상단, 하단 솔밸브
+                                        f"{(self.shared_memory[mem_idx] >> x) & 0x00000001}"})
+                            else:
+                                mem_idx = base_index + gpi_index[0]     #gpi 값이 저장되는 shared_memory 위치는 VALVE_NUM 상관없이 1개
+                                if mem_idx < len(self.shared_memory):
+                                    self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1500+x}","VALUE":                   # 상단, 하단 솔밸브
+                                        f"{((self.shared_memory[mem_idx] >> x) ^ 0x00000001) & 0x00000001}"})
+
                     for x in range(int(unit_config.get('MOTOR_NUM', 0))): 
                         if x < len(motor_index):
                             mem_idx = base_index + motor_index[x]
