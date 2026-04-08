@@ -377,59 +377,61 @@ class UnitBoardGetStatus(threading.Thread):
                 self.logging.error(f'Error restarting timer: {e}')
                        
     def run(self):
-        """송신 스레드 메인 루프 with 예외 처리"""
+        """송신 스레드 메인 루프 (서버 모드: PC가 접속할 때까지 대기)"""
+        server_socket = None
         try:
             common_config = self.config_file['common']
-            ip = common_config.get('HOST', 'localhost')
+            ip = common_config.get('HOST', '0.0.0.0')
             port = int(common_config.get('PORT1', 5001))
-            SERVER_ADDR = (ip, port)
+            BIND_ADDR = (ip, port)
             timeout_seconds = 5
-            
+
             # Timer 시작
             with self.timer_lock:
                 self.timer_active = True
             Timer(1, self.timer_update_task).start()
             self.logging.info('Timer started for status updates')
-            
-            reconnect_delay = 1  # 초기 재연결 대기 시간
-            max_reconnect_delay = 60
-            
+
+            # 서버 소켓 생성 (프로그램 수명 동안 유지)
+            server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            server_socket.bind(BIND_ADDR)
+            server_socket.listen(1)
+            self.logging.info(f'송신 서버 소켓 시작: {ip}:{port} (PC 접속 대기 중)')
+
             while True:
                 client = None
-                try: 
-                    self.logging.info(f'Attempting to connect to transmit server {ip}:{port}')
-                    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                try:
+                    self.logging.info(f'클라이언트 연결 대기 중 (PORT1={port})')
+                    client, addr = server_socket.accept()
                     client.settimeout(timeout_seconds)
-                    client.connect(SERVER_ADDR)
-                    self.logging.info(f'송신 서버에 연결 되었습니다. {ip}:{port}')
-                    
+                    self.logging.info(f'송신 클라이언트 연결됨: {addr}')
+
                     self.client = client
-                    reconnect_delay = 1  # 연결 성공 시 재연결 대기 시간 리셋
                     self.consecutive_errors = 0
-                    
+
                     while True:
-                        ######################################################################################################  
-                        # 2023-06-19-@K2H 
+                        ######################################################################################################
+                        # 2023-06-19-@K2H
                         # 서버에 데이터를 전송하기 전에 필요 데이터 정렬
                         if self.receive_event.is_set():
                             self.receive_event.clear()
                             self.logging.warning('Receive event triggered, reconnecting')
                             raise socket.error('Receive event triggered')
-                        
+
                         # 펌웨어 업데이트 등으로 인한 전송 일시 중지 대기
                         self.transmit_event.wait()
-                        
+
                         try:
-                            #send_data = self.socket_send_queue.get_nowait(timeout=5.0)
                             # get_nowait() 대신 timeout을 주어 타이밍 이슈 완화 및 CPU 부하 감소
                             send_data = self.socket_send_queue.get(timeout=0.1)
                         except queue.Empty:
                             continue
-                        
+
                         # 전송 직전에 한 번 더 체크 (wait 이후 상태 변경 가능성 대비)
                         if not self.transmit_event.is_set():
                             continue
-                        
+
                         if client and hasattr(client, '_closed') and not client._closed:
                             try:
                                 client.sendall(send_data)
@@ -442,23 +444,23 @@ class UnitBoardGetStatus(threading.Thread):
                                 self.logging.error(f"Unexpected send error: {e}")
                                 self.consecutive_errors += 1
                                 raise
-                        
+
                         ######################################################################################################
                         # 데이터 크기에 따른 대기 시간 조정
                         if len(send_data) > 1024:
-                            time.sleep(0.5)   
+                            time.sleep(0.5)
                         else:
                             time.sleep(0.1)
-                            
+
                 except socket.timeout:
-                    self.logging.warning(f"Transmitter connection timeout to {ip}:{port}")
+                    self.logging.warning(f"Transmitter client timeout: {addr if 'addr' in dir() else 'unknown'}")
                     self.consecutive_errors += 1
-                    
+
                 except socket.error as e:
                     self.logging.error(f"Transmitter socket error: {e}")
                     self.consecutive_errors += 1
-                    
-                    # 재연결 전 GET_STATUS 명령 전송
+
+                    # 클라이언트 연결 해제 시 GET_STATUS 명령 전송
                     for x in range(self.max_unit_board):
                         try:
                             data = {"UNIT_ID": x, "CMD": "GET_STATUS", "SEND": False}
@@ -466,36 +468,29 @@ class UnitBoardGetStatus(threading.Thread):
                             time.sleep(0.1)
                         except Exception as e:
                             self.logging.error(f'Error sending GET_STATUS during reconnect: {e}')
-                    
+
                 except RemoteError as e:
                     self.logging.critical(f"Multiprocessing Manager RemoteError: {e}")
                     self.logging.critical("Program requires restart due to broken IPC.")
                     os._exit(1)
-                    
+
                 except Exception as e:
                     self.logging.error(f"Unexpected error in transmitter: {e}")
                     self.logging.error(traceback.format_exc())
                     self.consecutive_errors += 1
-                    
+
                 finally:
-                    # 소켓 정리
+                    # 클라이언트 소켓 정리 (서버 소켓은 유지)
                     try:
                         if client and hasattr(client, '_closed') and not client._closed:
                             client.close()
-                            self.logging.info('Transmitter socket closed')
+                            self.logging.info('Transmitter client socket closed')
                     except Exception as e:
-                        self.logging.error(f'Error closing transmitter socket: {e}')
-                    
+                        self.logging.error(f'Error closing transmitter client socket: {e}')
+
                     self.client = None
-                    
-                    # 재연결 대기 (exponential backoff)
-                    if self.consecutive_errors > self.max_error_threshold:
-                        self.logging.warning(f'Too many consecutive errors ({self.consecutive_errors}), increasing backoff')
-                        reconnect_delay = min(reconnect_delay * 2, max_reconnect_delay)
-                    
-                    self.logging.info(f'Reconnecting to transmit server in {reconnect_delay} seconds...')
-                    time.sleep(reconnect_delay)
-                    
+                    self.logging.info('다음 클라이언트 연결 대기...')
+
         except Exception as e:
             self.logging.critical(f'Critical error in UnitBoardGetStatus run loop: {e}')
             self.logging.critical(traceback.format_exc())
@@ -503,6 +498,12 @@ class UnitBoardGetStatus(threading.Thread):
             # Timer 정지
             with self.timer_lock:
                 self.timer_active = False
+            # 서버 소켓 정리
+            try:
+                if server_socket:
+                    server_socket.close()
+            except Exception:
+                pass
             self.logging.info('UnitBoardGetStatus thread stopped')
                 
 def extract_json_objects(buffer_str):
@@ -662,97 +663,105 @@ class TcpClientThread(threading.Thread):
             self.i2c_write_with_retry(self.GPIOADDR2, 0x13, 0x00)
     
     def run(self):
-        """수신 스레드 메인 루프 with 예외 처리"""
+        """수신 스레드 메인 루프 (서버 모드: PC가 접속할 때까지 대기)"""
         self.logging.info('TcpClientThread 시작')
-        
+
         # Config 파일 읽기 with 예외 처리
         config_file = configparser.ConfigParser()
         try:
             config_result = config_file.read('/home/pi/Projects/cosmo-m/config/config.ini')
             if not config_result:
                 self.logging.error('Config file not found, using default values')
-                config_file['common'] = {'HOST': 'localhost', 'PORT2': '5002'}
+                config_file['common'] = {'HOST': '0.0.0.0', 'PORT2': '5002'}
         except Exception as e:
             self.logging.error(f'Failed to read config file: {e}')
-            config_file['common'] = {'HOST': 'localhost', 'PORT2': '5002'}
-        
+            config_file['common'] = {'HOST': '0.0.0.0', 'PORT2': '5002'}
+
         common_config = config_file['common']
-        
+
         # Status 스레드 시작
         receive_event = threading.Event()
         try:
-            status_thread = UnitBoardGetStatus(self.logging, self.tcp_queue, self.max_unit_board, 
+            status_thread = UnitBoardGetStatus(self.logging, self.tcp_queue, self.max_unit_board,
                                               self.shared_memory, self.socket_send_queue, receive_event, self.status_control_queue)
             status_thread.start()
             self.logging.info('UnitBoardGetStatus thread started')
         except Exception as e:
             self.logging.error(f'Failed to start status thread: {e}')
             return
-                    
-        ip = common_config.get('HOST', 'localhost')
+
+        ip = common_config.get('HOST', '0.0.0.0')
         port = int(common_config.get('PORT2', 5002))
-        SERVER_ADDR = (ip, port)
+        BIND_ADDR = (ip, port)
         timeout_seconds = 20
         old_data = None
         same_data_cnt = 0
-        reconnect_delay = 1
-        max_reconnect_delay = 60
-        
+
+        # 서버 소켓 생성 (프로그램 수명 동안 유지)
+        server_socket = None
+        try:
+            server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            server_socket.bind(BIND_ADDR)
+            server_socket.listen(1)
+            self.logging.info(f'수신 서버 소켓 시작: {ip}:{port} (PC 접속 대기 중)')
+        except Exception as e:
+            self.logging.critical(f'수신 서버 소켓 생성 실패: {e}')
+            return
+
         while True:
             client = None
             try:
-                self.logging.info(f'Attempting to connect to receive server {ip}:{port}')
-                client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.logging.info(f'클라이언트 연결 대기 중 (PORT2={port})')
+                client, addr = server_socket.accept()
                 client.settimeout(timeout_seconds)
-                client.connect(SERVER_ADDR)
-                self.logging.info(f'수신 서버에 연결 되었습니다. {ip}:{port}')
-                
+                self.logging.info(f'수신 클라이언트 연결됨: {addr}')
+
                 self.socket_event.set()
-                reconnect_delay = 1  # 연결 성공 시 리셋
                 self.consecutive_errors = 0
-                
+
                 # I2C LED ON with 재시도
                 self.i2c_led_control(on=True)
-                
+
                 # 수신 루프
                 receive_buffer = ""  # 완전한 JSON을 받기 위한 문자열 버퍼
                 while True:
                     try:
                         # 데이터 수신
-                        part = client.recv(8192)  # 8KB 버퍼로 확대
+                        part = client.recv(8192)  # 8KB 버퍼
                         if not part:  # 연결이 끊어진 경우
-                            self.logging.warning("Connection closed by server")
-                            raise socket.error("Connection closed by server")
-                        
+                            self.logging.warning("Connection closed by client")
+                            raise socket.error("Connection closed by client")
+
                         try:
                             receive_buffer += part.decode('UTF-8')
                         except UnicodeDecodeError:
                             # 불완전한 UTF-8 - 버퍼에 바이트로 임시 저장 후 재시도
                             self.logging.debug('Incomplete UTF-8 sequence, waiting for more data')
                             continue
-                        
+
                         self.logging.debug(f'Received {len(part)} bytes, buffer size: {len(receive_buffer)} bytes')
-                        
+
                         # 버퍼에서 완전한 JSON 객체들을 추출
                         json_objects, receive_buffer = extract_json_objects(receive_buffer)
-                        
+
                         if not json_objects:
                             # 완전한 JSON이 없으면 더 기다림
                             continue
-                        
+
                         self.consecutive_errors = 0  # 성공 시 에러 카운터 리셋
-                        
+
                         # 추출된 모든 JSON 객체 처리
                         for data in json_objects:
                             try:
                                 self.logging.debug(f'Processing JSON object: CMD={data.get("CMD", "unknown")}')
-                                
+
                                 # TCP 큐에 데이터 전달
                                 try:
                                     self.tcp_queue.put(data, block=False)
                                 except queue.Full:
                                     self.logging.warning('TCP queue full, data may be dropped')
-                                
+
                                 # ACK 응답 전송
                                 try:
                                     ack_msg = bytes(json.dumps({'CMD':'ACK',
@@ -764,21 +773,21 @@ class TcpClientThread(threading.Thread):
                                     self.logging.warning('Socket send queue full, ACK may be dropped')
                                 except Exception as e:
                                     self.logging.error(f'Error sending ACK: {e}')
-                                
+
                                 # 중복 데이터 체크
                                 if data.get('IDX') == old_data:
                                     same_data_cnt += 1
                                     if same_data_cnt > 2:
                                         self.logging.warning(f'Duplicate data detected (IDX: {old_data}), clearing queue')
                                         same_data_cnt = 0
-                                        
+
                                         # 큐 비우기
                                         try:
                                             while not self.socket_send_queue.empty():
                                                 self.socket_send_queue.get_nowait()
                                         except Exception as e:
                                             self.logging.error(f'Error clearing queue: {e}')
-                                        
+
                                         # 재전송 ACK
                                         try:
                                             ack_msg = bytes(json.dumps({'CMD':'ACK',
@@ -788,31 +797,31 @@ class TcpClientThread(threading.Thread):
                                             self.socket_send_queue.put(ack_msg, block=False)
                                         except Exception as e:
                                             self.logging.error(f'Error sending duplicate ACK: {e}')
-                                        
+
                                         receive_event.set()
                                 else:
                                     same_data_cnt = 0
                                 old_data = data.get('IDX')
-                                
+
                             except KeyError as e:
                                 self.logging.error(f'Missing key in JSON data: {e}')
                                 self.consecutive_errors += 1
-                                
+
                             except Exception as e:
                                 self.logging.error(f'Unexpected error processing data: {e}')
                                 self.logging.error(traceback.format_exc())
                                 self.consecutive_errors += 1
-                        
+
                         # 여러 메시지 처리 후 짧은 대기
                         if len(json_objects) > 1:
                             self.logging.debug(f'Processed {len(json_objects)} JSON objects in one batch')
                         time.sleep(0.01)
-                        
+
                     except socket.timeout:
                         # 타임아웃 발생 시 버퍼에 데이터가 있으면 처리 시도
                         if len(receive_buffer) > 0:
                             json_objects, receive_buffer = extract_json_objects(receive_buffer)
-                            
+
                             if json_objects:
                                 self.consecutive_errors = 0
                                 for data in json_objects:
@@ -826,49 +835,39 @@ class TcpClientThread(threading.Thread):
                                         old_data = data.get('IDX')
                                     except Exception as e:
                                         self.logging.error(f'Error processing data after timeout: {e}')
-                            
+
                             # 남은 불완전한 데이터가 너무 크면 경고
                             if len(receive_buffer) > 65536:  # 64KB 이상
                                 self.logging.warning(f"Buffer too large ({len(receive_buffer)} bytes), clearing")
                                 receive_buffer = ""
                                 self.consecutive_errors += 1
-                                
+
                                 if self.consecutive_errors >= self.max_error_threshold:
                                     self.logging.error('Too many errors, reconnecting')
                                     raise socket.error('Too many errors')
                         else:
                             self.logging.debug("Socket Data receive timeout, retrying...")
                             continue
-                        
-            except socket.timeout:
-                self.logging.warning(f"Receiver connection timeout to {ip}:{port}")
-                self.consecutive_errors += 1
-                
+
             except socket.error as e:
                 self.logging.error(f"Receiver socket error: {e}")
                 self.consecutive_errors += 1
-                
+
                 # I2C LED OFF (blink) with 재시도
                 self.i2c_led_control(on=False)
-                
+
             except Exception as e:
                 self.logging.error(f"Unexpected error in receiver: {e}")
                 self.logging.error(traceback.format_exc())
                 self.consecutive_errors += 1
-                
+
             finally:
-                # 소켓 정리
+                # 클라이언트 소켓 정리 (서버 소켓은 유지)
                 try:
                     if client and hasattr(client, '_closed') and not client._closed:
                         client.close()
-                        self.logging.info('Receiver socket closed')
+                        self.logging.info('Receiver client socket closed')
                 except Exception as e:
-                    self.logging.error(f'Error closing receiver socket: {e}')
-                
-                # 재연결 대기 (exponential backoff)
-                if self.consecutive_errors > self.max_error_threshold:
-                    self.logging.warning(f'Too many consecutive errors ({self.consecutive_errors}), increasing backoff')
-                    reconnect_delay = min(reconnect_delay * 2, max_reconnect_delay)
-                
-                self.logging.info(f'Reconnecting to receive server in {reconnect_delay} seconds...')
-                time.sleep(reconnect_delay)
+                    self.logging.error(f'Error closing receiver client socket: {e}')
+
+                self.logging.info('다음 클라이언트 연결 대기...')

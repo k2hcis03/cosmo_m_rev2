@@ -49,7 +49,7 @@ Logs are written to `log/{timestamp}/debug.log` (rotating, 1MB max, 5 backups).
 
 ## Architecture Overview
 
-Cosmo-M is a **fermentation/production tank control system** running on a Raspberry Pi. It orchestrates multiple embedded unit boards (UnitBoard) over CAN-FD, manages sensors and motors, runs PID temperature control, and communicates with a management PC over JSON/TCP.
+Cosmo-M is a **fermentation/production tank control system** running on an **industrial Raspberry Pi CM4 (Compute Module 4)**. It orchestrates multiple embedded unit boards (UnitBoard) over CAN-FD, manages sensors and motors, runs PID temperature control, and communicates with a management PC over JSON/TCP.
 
 ### Communication Stack
 
