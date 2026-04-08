@@ -56,7 +56,7 @@ Cosmo-M is a **fermentation/production tank control system** running on an **ind
 ```
 Main PC (JSON/TCP)
     ↓
-TcpClientThread  ←→  I2C GPIO (relay control)
+TcpServerThread  ←→  I2C GPIO (relay control)
     ↓
 CosmoMain (command router, main.py)
     ├── CanFDReceive thread   (CAN bus RX, IDs 0x100–0x11F)
@@ -81,7 +81,7 @@ CosmoMain (command router, main.py)
 ### Inter-Process Communication
 
 - **Shared memory**: NumPy array, 50 bytes per unit board. Layout defined in `constdefine.py` (offsets for PID state, ADC channels ×8, temperatures ×8, GPIO, RPM, load cell, Brix/CO2/pH, error codes).
-- **Queues**: Commands flow Main → UnitBoard; responses flow UnitBoard → TcpClientThread.
+- **Queues**: Commands flow Main → UnitBoard; responses flow UnitBoard → TcpServerThread.
 - **Semaphores**: Protect shared memory critical sections.
 
 ### Configuration

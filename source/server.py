@@ -577,8 +577,8 @@ def extract_json_objects(buffer_str):
     return json_objects, remaining
 
 
-class TcpClientThread(threading.Thread):
-    def __init__(self, tcp_queue, logging, GPIOADDR1, GPIOADDR2, socket_event, 
+class TcpServerThread(threading.Thread):
+    def __init__(self, tcp_queue, logging, GPIOADDR1, GPIOADDR2,
                  i2c_semaphor, MAXUNITBOARD, shm_name, unit_np_shm, socket_send_queue, status_control_queue):
         threading.Thread.__init__(self)
         self.daemon = True
@@ -592,7 +592,6 @@ class TcpClientThread(threading.Thread):
         self.shm_name = shm_name
         self.unit_np_shm = unit_np_shm
         self.socket_send_queue = socket_send_queue
-        self.socket_event = socket_event
         self.status_control_queue = status_control_queue
         
         # 에러 카운터
@@ -664,7 +663,7 @@ class TcpClientThread(threading.Thread):
     
     def run(self):
         """수신 스레드 메인 루프 (서버 모드: PC가 접속할 때까지 대기)"""
-        self.logging.info('TcpClientThread 시작')
+        self.logging.info('TcpServerThread 시작')
 
         # Config 파일 읽기 with 예외 처리
         config_file = configparser.ConfigParser()
@@ -717,7 +716,6 @@ class TcpClientThread(threading.Thread):
                 client.settimeout(timeout_seconds)
                 self.logging.info(f'수신 클라이언트 연결됨: {addr}')
 
-                self.socket_event.set()
                 self.consecutive_errors = 0
 
                 # I2C LED ON with 재시도
