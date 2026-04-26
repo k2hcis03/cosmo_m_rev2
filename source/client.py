@@ -576,7 +576,7 @@ def extract_json_objects(buffer_str):
     return json_objects, remaining
 
 
-class TcpServerThread(threading.Thread):
+class TcpClientThread(threading.Thread):
     def __init__(self, tcp_queue, logging, GPIOADDR1, GPIOADDR2, socket_event, 
                  i2c_semaphor, MAXUNITBOARD, shm_name, unit_np_shm, socket_send_queue, status_control_queue):
         threading.Thread.__init__(self)
@@ -663,7 +663,7 @@ class TcpServerThread(threading.Thread):
     
     def run(self):
         """수신 스레드 메인 루프 with 예외 처리"""
-        self.logging.info('TcpServerThread 시작')
+        self.logging.info('TcpClientThread 시작')
         
         # Config 파일 읽기 with 예외 처리
         config_file = configparser.ConfigParser()

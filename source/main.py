@@ -20,7 +20,7 @@ import numpy as np
 import configparser
 import unitboard
 from unitboard import UnitBoard as unit_board
-from server import TcpServerThread as tcp_server
+from client import TcpClientThread as tcp_client
 
 shared_object = Manager().list()            # 프로세스간 공유 소켓 정보
 shared_object.insert(0, None)
@@ -298,11 +298,11 @@ def main():
     main_func.start()
     
     socket_event = threading.Event()
-    main_func.client = tcp_server(tcp_queue, logging, GPIOADDR1, GPIOADDR2, socket_event, i2c_semaphor, MAXUNITBOARD, 
+    main_func.client = tcp_client(tcp_queue, logging, GPIOADDR1, GPIOADDR2, socket_event, i2c_semaphor, MAXUNITBOARD, 
                                   shm.name, main_func.unit_np_shm, socket_send_queue, status_control_queue)
-    main_func.client.start()                            #tcp server 시작
+    main_func.client.start()                            #tcp client 시작
     unitboard.g_file_path = common_config['JSON_FILE']
-    # print("Server is not Connected")
+    # print("client is not Connected")
     try:
         while True:
             # if shared_object[0] and not shared_object[0]._closed:           # 처음 서버에 연결 될 때까지 무한루프 실행
