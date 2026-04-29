@@ -162,6 +162,12 @@ class UnitBoardGetStatus(threading.Thread):
             brix_index = [ConstDefine.SHARED_MEMORY_OFFSET_BRIX, 
                           ConstDefine.SHARED_MEMORY_OFFSET_BRIX]                       #Brix 값이 저장되는 shared_memory 위치
             flow_index = [ConstDefine.SHARED_MEMORY_OFFSET_FLOWER, 
+                          ConstDefine.SHARED_MEMORY_OFFSET_FLOWER,
+                          ConstDefine.SHARED_MEMORY_OFFSET_FLOWER,
+                          ConstDefine.SHARED_MEMORY_OFFSET_FLOWER,
+                          ConstDefine.SHARED_MEMORY_OFFSET_FLOWER,
+                          ConstDefine.SHARED_MEMORY_OFFSET_FLOWER,
+                          ConstDefine.SHARED_MEMORY_OFFSET_FLOWER,
                           ConstDefine.SHARED_MEMORY_OFFSET_FLOWER]                       #Flow 값이 저장되는 shared_memory 위치
             loadcell_index = [ConstDefine.SHARED_MEMORY_OFFSET_LOAD_CELL, 
                               ConstDefine.SHARED_MEMORY_OFFSET_LOAD_CELL]                   #Load Cell 값이 저장되는 shared_memory 위치
@@ -257,13 +263,14 @@ class UnitBoardGetStatus(threading.Thread):
                                 self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1800+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                     # 유량센서 전송 기능
                     x_index = 0
-                    for x in range(int(unit_config.get('ADC_NUM', 0))):
+                    for x in range(int(unit_config.get('FLOW_NUM', 0))):
                         if x < len(flow_index):
-                            mem_idx = base_index + flow_index[0]          #flow 값이 저장되는 shared_memory 위치는 ADC_NUM과 상관없이 1개
-                            adc_usage = int(unit_config.get(f'ADC_{x+1}', 0))
-                            if adc_usage == 2 and mem_idx < len(self.shared_memory):
-                                self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{2000+x_index}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
-                                x_index += 1
+                            mem_idx = base_index + flow_index[0]          #flow 값이 저장되는 shared_memory 위치는 FLOW_NUM 상관없이 1개
+                            flow_sensor = (self.shared_memory[mem_idx]*0.001-4.)*18.75
+                            if flow_sensor < 0.:
+                                flow_sensor = 0.
+                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{2000+x_index}","VALUE":f"{flow_sensor:0.2F}"}) # 0~300l/min
+                            x_index += 1
 
                     # CT 센서 전송 기능  센서 번호 김휴정 박사와 협의 필요 
                     for x in range(int(unit_config.get('ADC_NUM', 0))):
