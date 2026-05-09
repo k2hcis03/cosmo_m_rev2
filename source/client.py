@@ -293,7 +293,7 @@ class UnitBoardGetStatus(threading.Thread):
                         if self.shared_memory[mem_idx] == ConstDefine.ERROR_CODE_COMMUNICATION:  # 통신에러 코드는 10으로 전송
                             self.canfd_communication_error_cnt[i] += 1
                             
-                            if self.canfd_communication_error_cnt[i] >= 10:   # 10번 연속 통신에러 발생 시 통신에러 코드 전송
+                            if self.canfd_communication_error_cnt[i] >= 1:   # 연속 1번 연속 통신에러 발생 시 통신에러 코드 전송
                                 self.send_data['ERROR'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","CODE":f"10"})
                         else:   # 나머지 에러 코드는 그대로 전송    
                             self.send_data['ERROR'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","CODE":f"{self.shared_memory[mem_idx]}"})

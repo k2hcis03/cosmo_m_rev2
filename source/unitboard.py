@@ -55,12 +55,8 @@ class UnitBoardCanFdReceive(threading.Thread):
         while True:
             try:
                 time.sleep(0.10)
-                #통신이 되고 있다는 것을 공유메모리에 저장하기 위해 세마포어 획득하고 통신에러 코드 저장 (whilw문이 동작하면 에러 코드는 클리어 됨)
-                self.unit_semaphor.acquire()
-                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ERROR_CODE + self.id*self.shared_memory_size] = ConstDefine.ERROR_CODE_COMMUNICATION # 10이면 통신에러 
-                self.unit_semaphor.release()
 
-                while message := self.can_fd_receive_queue.get():
+                while message := self.can_fd_receive_queue.get(timeout=5):  # 큐에서 메시지를 가져오고, 0.2초 동안 기다립니다.
                     id = message.arbitration_id - 0x100
                     if message.data[0] == ConstDefine.SET_CONFIG_COMMAND:
                         if message.data[1] == 1:            # 1 : 정상, 0 : 오류
@@ -345,6 +341,11 @@ class UnitBoardCanFdReceive(threading.Thread):
                     self.command_queue.put(message, block=False) 
                 else:
                     self.logging.warning(f'id: {id} unit board is not response')    
+            except queue.Empty:
+                #통신이 안되면 공유메모리에 저장하기 위해 세마포어 획득하고 통신에러 코드 저장 (whilw문이 동작하면 에러 코드는 클리어 됨)
+                self.unit_semaphor.acquire()
+                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ERROR_CODE + self.id*self.shared_memory_size] = ConstDefine.ERROR_CODE_COMMUNICATION # 10이면 통신에러 
+                self.unit_semaphor.release()
             except Exception as e:
                 print(e)
 # 물탱크 유닛보드 일때, 생성되는 쓰레드 #########################
