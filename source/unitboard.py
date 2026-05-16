@@ -1302,7 +1302,7 @@ class UnitBoard:
                                     data.append((crc >> 8) & 0xFF)
                                     message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = True,
                                                 data=bytearray(data))
-                                    # time.sleep(0.005)
+                                    time.sleep(0.015)    # 유닛보드가 펌웨어 업데이트 명령어를 처리할 수 있도록 15ms 대기
                                     offset += 56
                                     print(f'index: {index}')
                                     index += 1
@@ -1312,7 +1312,7 @@ class UnitBoard:
                                     else:
                                         data = [ConstDefine.FIRMWARE_UPDATE_COMMAND]
                                         self.can_fd_transmitte_queue.put(message) 
-                                    time.sleep(0.002)                       # 0.002초 대기 없으면 파일 전송 실패 (디버그 모드에서는 동작하나 단독 실행시 실패)
+                                    time.sleep(0.002)                 # 아래 대기 시간은 유닛보드에 RS485가 없으면 지연이 생기기 때문에 안정적인 지연시간 필요
                                 self.can_fd_transmitte_queue.put(message) 
                             except Exception as e:
                                 logging.error(f'id: {id} 펌웨어 업데이트 중 오류 발생: {e}')
