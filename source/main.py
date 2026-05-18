@@ -254,7 +254,17 @@ class CosmoMain(threading.Thread):
                 # if message['UNIT_ID'] >= 0 and message['UNIT_ID'] < MAXUNITBOARD:       # 0 ~ MAXUNITBOARD-1
                 #     self.command_queue[message['UNIT_ID']].put(message, block=False)
                 # else:
-                #     logging.info(f"Wrong Unit board id{message['UNIT_ID']}")        
+                #     logging.info(f"Wrong Unit board id{message['UNIT_ID']}")     
+            elif message['CMD'] == 'ADC_CAL':
+                matching = False
+                for x in range(MAXUNITBOARD):
+                    config = self.common_config[f'unit_board{x}']
+                    if self.find_tank_id_to_unit_id(message['UNIT_ID'], config):
+                        message['UNIT_ID'] = x
+                        self.command_queue[x].put(message, block=False)
+                        matching = True
+                if not matching:
+                    logging.info(f"Wrong Unit board id{message['UNIT_ID']}")  
 def main():
     config_file = configparser.ConfigParser()  ## 클래스 객체 생성
     config_file.read('/home/pi/Projects/cosmo-m/config/config.ini')  ## 파일 읽기

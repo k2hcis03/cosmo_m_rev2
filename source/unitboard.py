@@ -1325,6 +1325,22 @@ class UnitBoard:
                             message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = True,
                                         data=bytearray(data))
                             self.can_fd_transmitte_queue.put(message) 
+                    elif command['CMD'] == 'ADC_CAL':
+                        if int(self.config['ADDRESS']) != 999:
+                            data = [ConstDefine.ADC_CALIBRATION_COMMAND]
+                            temp = int(command['CHANNEL'])
+                            data.append(temp & 0xff)  
+                            temp = int(command['CURRENT'])
+                            data.append(temp & 0xff)  
+                            temp = int(command['FLASH'])
+                            data.append(temp & 0xff)        
+                            data.append(0)               # reserved
+                            crc = self.crc16(data)
+                            data.append(crc & 0xFF)
+                            data.append((crc >> 8) & 0xFF)
+                            message = can.Message(is_extended_id=False, is_fd = True, bitrate_switch = True, arbitration_id=id,  
+                                        data=bytearray(data))
+                            self.can_fd_transmitte_queue.put(message) 
                 self.i2c_semaphor.acquire()
                 i2cbus.write_byte_data(self.GPIOADDR1, 0x12, 0xFF)
                 i2cbus.write_byte_data(self.GPIOADDR1, 0x13, 0xFF)
