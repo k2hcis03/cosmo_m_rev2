@@ -229,7 +229,7 @@ class UnitBoardGetStatus(threading.Thread):
                         if x < len(loadcell_index):
                             mem_idx = base_index + loadcell_index[x]
                             if mem_idx < len(self.shared_memory):
-                                self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1400+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
+                                self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1400+x}","VALUE":f"{self.shared_memory[mem_idx]:0.2F}"}) # 로드셀은 유닛보드에서 *1000을 안함(오버플로우)
                     
                     for x in range(int(unit_config.get('VALVE_NUM', 0))):
                         if x < len(gpo_index):
@@ -248,7 +248,7 @@ class UnitBoardGetStatus(threading.Thread):
                         if x < len(motor_index):
                             mem_idx = base_index + motor_index[x]
                             if mem_idx < len(self.shared_memory):
-                                self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1600+x}","VALUE":f"{self.shared_memory[mem_idx]*1:0.2F}"}) # 모터 속도는 유닛보드에서 *1000을 안함(오버플로우우)
+                                self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1600+x}","VALUE":f"{self.shared_memory[mem_idx]*1:0.2F}"}) # 모터 속도는 유닛보드에서 *1000을 안함(오버플로우)
                   
                     for x in range(int(unit_config.get('BRIX_NUM', 0))):
                         if x < len(brix_index):
