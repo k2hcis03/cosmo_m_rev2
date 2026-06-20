@@ -202,7 +202,7 @@ class UnitBoardCanFdReceive(threading.Thread):
                                 elif int(self.config['FEED_WATER_SELECT']) == 3:
                                     data = self.shared_memory_u[max_unitboard * self.shared_memory_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER2_MOTOR]
 
-                                if (np.int32)(message.data[31]) == OFF:
+                                if (np.int32)(message.data[31]) == OFF:  #꺼저 있으면 동작
                                     data = data & ~(1 << id)
                                     self.water_motor_on = False
                                     # self.shared_memory_u[max_unitboard * self.shared_memory_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR] = data
@@ -494,7 +494,7 @@ class UnitBoardTempControl(threading.Thread):
                         message = {"UNIT_ID" : self.id,                  
                                         "CMD":"TEMP_RPM",
                                         "SPEED" : ref_rpm, 
-                                        "DIR"   : 'FW',            #FW = forward, RV = reverse
+                                        "DIR"   : 'RV',            #FW = forward, RV = reverse
                                         "ONOFF" : 'ON', 
                                         "TIME" : ref_motor_time,
                                         "SEND" : False}    
@@ -633,7 +633,7 @@ class UnitBoardTempControl(threading.Thread):
                             message = {"UNIT_ID" : self.id,                  
                                         "CMD":"TEMP_RPM",
                                         "SPEED" : ref_rpm, 
-                                        "DIR"   : 'FW',            #FW = forward, RV = reverse
+                                        "DIR"   : 'RV',            #FW = forward, RV = reverse
                                         "ONOFF" : 'ON', 
                                         "TIME" : ref_motor_time,
                                         "SEND" : False}    
@@ -654,7 +654,14 @@ class UnitBoardTempControl(threading.Thread):
                                     analog6 = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP6 + self.id*self.shared_memory_size] * 0.001 #온도 센서 6
                                     analog7 = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP7 + self.id*self.shared_memory_size] * 0.001 #온도 센서 6
                                     analog8 = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP8 + self.id*self.shared_memory_size] * 0.001 #온도 센서 6
-
+                                    
+                                    # config.ini에서 ADC_1가 사용안하면 아래서 analog1~analog8위치를 보정
+                                    # 아래 코드 ADC_0 ~ 값마다 정확한 보정 필요 현재는 잠시 수정함.
+                                    offset = 0
+                                    for i in range(int(self.config["ADC_NUM"])):
+                                        if int(self.config[f"ADC_{i+1}"]) == 0:
+                                            offset += 1
+                                    analog2 = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP2 + self.id*self.shared_memory_size + offset] * 0.001 #온도 센서 2 온도 제어에 사용하는 하단 온도센서
                                     # 남양주 버전부터는 외부 온/습도 사용 안함.
                                     # current_ext_temp1 = self.shared_memory_u[0x0C + self.id*self.shared_memory_size] * 0.1 #Ext Temp1
                                     # current_ext_humi1 = self.shared_memory_u[0x0D + self.id*self.shared_memory_size] * 0.1 #Ext Humi1
@@ -790,7 +797,7 @@ class UnitBoard:
             # CRC16 2byte를 Little Endian으로 배열 뒤에 추가
             data.append(crc & 0xFF)
             data.append((crc >> 8) & 0xFF)
-            message = can.Message(is_extended_id=False, is_fd = True, bitrate_switch = True, arbitration_id=id,  
+            message = can.Message(is_extended_id=False, is_fd = True, bitrate_switch = False, arbitration_id=id,  
                                     data=bytearray(data))
         except ValueError as e:
             print(e)
@@ -1027,7 +1034,7 @@ class UnitBoard:
                             crc = self.crc16(data)
                             data.append(crc & 0xFF)
                             data.append((crc >> 8) & 0xFF)
-                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = True,
+                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = False,
                                         data=bytearray(data))
                             
                             while not can_fd_receive_queue.empty():
@@ -1045,7 +1052,7 @@ class UnitBoard:
                             crc = self.crc16(data)
                             data.append(crc & 0xFF)
                             data.append((crc >> 8) & 0xFF)
-                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = True,
+                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = False,
                                         data=bytearray(data))
                             
                             while not can_fd_receive_queue.empty():
@@ -1088,7 +1095,7 @@ class UnitBoard:
                             crc = self.crc16(data)
                             data.append(crc & 0xFF)
                             data.append((crc >> 8) & 0xFF)
-                            message = can.Message(is_extended_id=False, is_fd = True, bitrate_switch = True, arbitration_id=id,  
+                            message = can.Message(is_extended_id=False, is_fd = True, bitrate_switch = False, arbitration_id=id,  
                                         data=bytearray(data))
                             self.can_fd_transmitte_queue.put(message) 
                     elif command['CMD'] == 'TEMP_VALVE':
@@ -1113,7 +1120,7 @@ class UnitBoard:
                             #         data = data & ~(1 << id)
                             #     shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER2_MOTOR] = data
                             
-                            # 냉각수 선택 0 = 사용하지 않음, 1 = CT water 2 = 칠러1, 3 = 칠러2
+                            # 냉각수 선택 0 = 사용하지 않음, 1 = water 2 = 칠러1, 3 = 칠러2
                             # 냉각수 선택은 탱크에 종류에 따라 다름
                             if int(self.config['CHILER_WATER_SELECT']) == 1:
                                 data = shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR]
@@ -1147,7 +1154,7 @@ class UnitBoard:
                             crc = self.crc16(data)
                             data.append(crc & 0xFF)
                             data.append((crc >> 8) & 0xFF)
-                            message = can.Message(is_extended_id=False, is_fd = True, bitrate_switch = True, arbitration_id=id,  
+                            message = can.Message(is_extended_id=False, is_fd = True, bitrate_switch = False, arbitration_id=id,  
                                         data=bytearray(data))
                             self.can_fd_transmitte_queue.put(message) 
                     elif command['CMD'] == 'WEIGHT_VALVE':
@@ -1200,7 +1207,7 @@ class UnitBoard:
                             crc = self.crc16(data)
                             data.append(crc & 0xFF)
                             data.append((crc >> 8) & 0xFF)
-                            message = can.Message(is_extended_id=False, is_fd = True, bitrate_switch = True, arbitration_id=id,  
+                            message = can.Message(is_extended_id=False, is_fd = True, bitrate_switch =  False, arbitration_id=id,  
                                         data=bytearray(data))                           
                             self.can_fd_transmitte_queue.put(message) 
                             ontime = int(command['ONTIME'])          # ONTIME은 초 단위로 전송
@@ -1248,9 +1255,16 @@ class UnitBoard:
                                 message = {"UNIT_ID" : id,                  
                                         "CMD":"TEMP_RPM",
                                         "SPEED" : rpm, 
-                                        "DIR"   : 'FW',            #FW = forward, RV = reverse
+                                        "DIR"   : 'RV',            #FW = forward, RV = reverse
                                         "ONOFF" : 'ON', 
                                         "TIME" : run_time,
+                                        "SEND" : True}    
+                                command_queue.put(message, block=False)
+                            elif command['CTRL'][0]['SENSOR_ID'] == '1400':     #로드셀
+                                zero1 = int(command['CTRL'][0]['PARAM0'])
+                                zero2 = int(command['CTRL'][0]['PARAM1'])
+                                message = {"UNIT_ID" : id,                  
+                                        "CMD":"LOAD_ZERO",
                                         "SEND" : True}    
                                 command_queue.put(message, block=False)
                     elif command['CMD'] == 'FIRMWARE_UPDATE':                      
@@ -1300,7 +1314,7 @@ class UnitBoard:
                                     crc = self.crc16(data)
                                     data.append(crc & 0xFF)
                                     data.append((crc >> 8) & 0xFF)
-                                    message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = True,
+                                    message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = False,
                                                 data=bytearray(data))
                                     time.sleep(0.015)    # 유닛보드가 펌웨어 업데이트 명령어를 처리할 수 있도록 15ms 대기
                                     offset += 56
@@ -1322,7 +1336,7 @@ class UnitBoard:
                             crc = self.crc16(data)
                             data.append(crc & 0xFF)
                             data.append((crc >> 8) & 0xFF)
-                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = True,
+                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = False,
                                         data=bytearray(data))
                             self.can_fd_transmitte_queue.put(message) 
                     elif command['CMD'] == 'ADC_CAL':
@@ -1338,7 +1352,16 @@ class UnitBoard:
                             crc = self.crc16(data)
                             data.append(crc & 0xFF)
                             data.append((crc >> 8) & 0xFF)
-                            message = can.Message(is_extended_id=False, is_fd = True, bitrate_switch = True, arbitration_id=id,  
+                            message = can.Message(is_extended_id=False, is_fd = True, bitrate_switch = False, arbitration_id=id,  
+                                        data=bytearray(data))
+                            self.can_fd_transmitte_queue.put(message) 
+                    elif command['CMD'] == 'LOAD_ZERO':
+                        if int(self.config['ADDRESS']) != 999:
+                            data = [ConstDefine.LOADCELL_ZERO_COMMAND]                 
+                            crc = self.crc16(data)
+                            data.append(crc & 0xFF)
+                            data.append((crc >> 8) & 0xFF)
+                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = False,
                                         data=bytearray(data))
                             self.can_fd_transmitte_queue.put(message) 
                 self.i2c_semaphor.acquire()

@@ -49,3 +49,4 @@ ref/
 # data files
 data/
 uniboardserver/
+firmware/firmware.bin

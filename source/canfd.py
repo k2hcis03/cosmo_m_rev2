@@ -81,8 +81,8 @@ class CanFDReceive(threading.Thread):
                 rx_fifo_size=8192, 
                 channel='can0', 
                 interface='socketcan', 
-                bitrate_switch=True, 
-                bitrate=1000000, 
+                bitrate_switch=False, 
+                bitrate=4000000, 
                 data_bitrate=4000000, 
                 fd=True, 
                 can_filters=filters
@@ -122,9 +122,26 @@ class CanFDReceive(threading.Thread):
                     # 타임아웃 발생 (정상적인 경우일 수 있음)
                     continue
                 
+                if message.is_error_frame:
+                    self.consecutive_errors += 1
+                    self.total_errors += 1
+                    self.logging.warning(
+                        f'CAN bus error frame (0x{message.arbitration_id:X}), '
+                        f'consecutive: {self.consecutive_errors}'
+                    )
+                    if self.consecutive_errors >= self.max_error_threshold:
+                        self.logging.critical(
+                            f'Too many CAN error frames ({self.consecutive_errors}), reinitializing bus'
+                        )
+                        if self.reinitialize_can_bus():
+                            time.sleep(1.0)
+                        else:
+                            time.sleep(5.0)
+                    continue
+
                 # 정상 수신 시 에러 카운터 리셋
                 self.consecutive_errors = 0
-                
+
                 # arbitration_id 범위 확인
                 if message.arbitration_id >= 0x100 and message.arbitration_id <= 0x11F:
                     queue_index = message.arbitration_id - 0x100
@@ -270,7 +287,7 @@ class CanFDTransmitte(threading.Thread):
                 rx_fifo_size=8192, 
                 channel='can0', 
                 interface='socketcan', 
-                bitrate_switch=True, 
+                bitrate_switch=False, 
                 bitrate=1000000, 
                 data_bitrate=4000000, 
                 fd=True, 
