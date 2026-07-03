@@ -172,7 +172,7 @@ class CanFDReceive(threading.Thread):
                 # CAN 프로토콜 에러
                 self.consecutive_errors += 1
                 self.total_errors += 1
-                self.logging.error(f'CAN error in receive: {e} (consecutive errors: {self.consecutive_errors})')
+                # self.logging.error(f'CAN error in receive: {e} (consecutive errors: {self.consecutive_errors})')
                 
                 if self.consecutive_errors >= self.max_error_threshold:
                     self.logging.critical(f'Too many consecutive CAN errors ({self.consecutive_errors}), reinitializing bus')
