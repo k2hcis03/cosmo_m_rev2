@@ -802,7 +802,7 @@ class UnitBoard:
         except ValueError as e:
             print(e)
         
-        self.can_fd_transmitte_queue.put(message) 
+        self.transmit_can_message(message, logging, id) 
         ######################################################################################################################################################                        
     # data 리스트에 있는 값들에 대해 CRC16 계산 후 data에 추가
     def crc16(self, data: list):
@@ -815,6 +815,15 @@ class UnitBoard:
                 else:
                     crc >>= 1
         return crc
+
+    def transmit_can_message(self, message, logging, id, timeout=2.0):
+        # can_fd_transmitte_queue는 모든 유닛보드 프로세스가 공유하는 크기 제한 큐(1024).
+        # CAN 버스 장애로 송신 스레드가 지연되면 여기서 무한 블로킹되어 이 프로세스의 명령 처리 루프
+        # 전체가 멈추고, 결국 상위 command_queue까지 연쇄적으로 가득 차게 되므로 타임아웃을 둠.
+        try:
+            self.can_fd_transmitte_queue.put(message, timeout=timeout)
+        except queue.Full:
+            logging.error(f'id: {id} CAN transmit queue full, message dropped (arbitration_id=0x{message.arbitration_id:X})')
 
     # WEIGHT_VALVE 타이머 콜백 함수  물 모터 구동 시간 후, 물 모터 정지 처리
     def timer_callback(self, id, shared_memory_u, unit_semaphor, can_fd_receive_thread):
@@ -1040,7 +1049,7 @@ class UnitBoard:
                             while not can_fd_receive_queue.empty():
                                 can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
                 
-                            self.can_fd_transmitte_queue.put(message) 
+                            self.transmit_can_message(message, logging, id) 
                     elif command['CMD'] == 'SET_GPIO':
                         if int(self.config['ADDRESS']) != 999:
                             data = [ConstDefine.SET_GPIO_COMMAND]
@@ -1058,7 +1067,7 @@ class UnitBoard:
                             while not can_fd_receive_queue.empty():
                                 can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
                 
-                            self.can_fd_transmitte_queue.put(message) 
+                            self.transmit_can_message(message, logging, id) 
                     elif command['CMD'] == 'GET_STATUS':    # 2025.12.09 - @K2H CAN FD 멀티 마스터 구현으로 여기 호출 안됨
                         pass
                     elif command['CMD'] == 'START_TEMP':
@@ -1097,7 +1106,7 @@ class UnitBoard:
                             data.append((crc >> 8) & 0xFF)
                             message = can.Message(is_extended_id=False, is_fd = True, bitrate_switch = False, arbitration_id=id,  
                                         data=bytearray(data))
-                            self.can_fd_transmitte_queue.put(message) 
+                            self.transmit_can_message(message, logging, id) 
                     elif command['CMD'] == 'TEMP_VALVE':
                         if int(self.config['ADDRESS']) != 999:
                             # 물탱크 유닛보드에 칠러 모터 제어 명령어 전송 후, TEMP_VALVE 명령어 전송
@@ -1156,7 +1165,7 @@ class UnitBoard:
                             data.append((crc >> 8) & 0xFF)
                             message = can.Message(is_extended_id=False, is_fd = True, bitrate_switch = False, arbitration_id=id,  
                                         data=bytearray(data))
-                            self.can_fd_transmitte_queue.put(message) 
+                            self.transmit_can_message(message, logging, id) 
                     elif command['CMD'] == 'WEIGHT_VALVE':
                         if int(self.config['ADDRESS']) != 999:
                             # 물탱크 유닛보드에 모터 제어 명령어 전송 후, WEIGHT_VALVE 명령어 전송
@@ -1209,7 +1218,7 @@ class UnitBoard:
                             data.append((crc >> 8) & 0xFF)
                             message = can.Message(is_extended_id=False, is_fd = True, bitrate_switch =  False, arbitration_id=id,  
                                         data=bytearray(data))                           
-                            self.can_fd_transmitte_queue.put(message) 
+                            self.transmit_can_message(message, logging, id) 
                             ontime = int(command['ONTIME'])          # ONTIME은 초 단위로 전송
                             current_time = time.time()
                             can_fd_receive_thread.water_motor_on_time = current_time  # UnitBoardCanFdReceive에 최신 시간 값 전달
@@ -1218,8 +1227,8 @@ class UnitBoard:
                             Timer(ontime, self.timer_callback, args=(id, shared_memory_u, unit_semaphor, can_fd_receive_thread)).start()
                     elif command['CMD'] == 'CTRL':
                         if int(self.config['TANK_ID']) == int(command['TANK_ID']) and int(self.config['ADDRESS']) != 999:
-                            if command['CTRL'][0]['SENSOR_ID'] == '1500':    #밸브는 4개 밸브 아이디는 1500부터 시작 1500-> 냉각
-                                x = self.config["SOLVALVE2"]                #밸브 I/O 번호
+                            if command['CTRL'][0]['SENSOR_ID'] == '1501':    #밸브는 4개 밸브 아이디는 1500부터 시작 1500-> 냉각
+                                x = self.config["SOLVALVE2"]                 #밸브 I/O 번호
                                 if command['CTRL'][0]['PARAM0'] == 'ON':
                                     value = ON
                                 else:
@@ -1229,7 +1238,7 @@ class UnitBoard:
                                             "CHANNEL": x,
                                             "VALUE" : value}
                                 command_queue.put(message, block=False) 
-                            elif command['CTRL'][0]['SENSOR_ID'] == '1501':  #밸브는 4개 밸브 아이디는 1500부터 시작 1501-> 워터
+                            elif command['CTRL'][0]['SENSOR_ID'] == '1500':  #밸브는 4개 밸브 아이디는 1500부터 시작 1501-> 워터
                                 x = self.config["SOLVALVE1"]                #밸브 I/O 번호
                                 if command['CTRL'][0]['PARAM0'] == 'ON':
                                     value = ON
@@ -1261,11 +1270,24 @@ class UnitBoard:
                                         "SEND" : True}    
                                 command_queue.put(message, block=False)
                             elif command['CTRL'][0]['SENSOR_ID'] == '1400':     #로드셀
-                                zero1 = int(command['CTRL'][0]['PARAM0'])
+                                zero1 = float(command['CTRL'][0]['PARAM0'])
                                 zero2 = int(command['CTRL'][0]['PARAM1'])
-                                message = {"UNIT_ID" : id,                  
-                                        "CMD":"LOAD_ZERO",
-                                        "SEND" : True}    
+
+                                if zero1 == 0.:
+                                    message = {"UNIT_ID" : id,                  
+                                            "CMD":"LOAD_ZERO",
+                                            "SEND" : True}  
+                                else:
+                                    x = self.config["SOLVALVE1"]                #밸브 I/O 번호
+                                    value = ON
+                                    temp = int(float(command['CTRL'][0]['PARAM0']) * 10) # 소수점 1자리까지 유효 ex) 38.2 ->38.2kg
+                                    ontime = int(self.config["WATER_VALVE_ON_TIME"])
+                                    message = {"UNIT_ID" : id,                  
+                                                "CMD":"WEIGHT_VALVE",
+                                                "CHANNEL": x,
+                                                "VALUE" : value,
+                                                "WEIGHT" : temp, 
+                                                "ONTIME" : ontime}  
                                 command_queue.put(message, block=False)
                     elif command['CMD'] == 'FIRMWARE_UPDATE':                      
                         if int(self.config['ADDRESS']) != 999:
@@ -1325,9 +1347,9 @@ class UnitBoard:
                                         break
                                     else:
                                         data = [ConstDefine.FIRMWARE_UPDATE_COMMAND]
-                                        self.can_fd_transmitte_queue.put(message) 
+                                        self.transmit_can_message(message, logging, id) 
                                     time.sleep(0.002)                 # 아래 대기 시간은 유닛보드에 RS485가 없으면 지연이 생기기 때문에 안정적인 지연시간 필요
-                                self.can_fd_transmitte_queue.put(message) 
+                                self.transmit_can_message(message, logging, id) 
                             except Exception as e:
                                 logging.error(f'id: {id} 펌웨어 업데이트 중 오류 발생: {e}')
                     elif command['CMD'] == 'GET_VERSION':
@@ -1338,7 +1360,7 @@ class UnitBoard:
                             data.append((crc >> 8) & 0xFF)
                             message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = False,
                                         data=bytearray(data))
-                            self.can_fd_transmitte_queue.put(message) 
+                            self.transmit_can_message(message, logging, id) 
                     elif command['CMD'] == 'ADC_CAL':
                         if int(self.config['ADDRESS']) != 999:
                             data = [ConstDefine.ADC_CALIBRATION_COMMAND]
@@ -1354,7 +1376,7 @@ class UnitBoard:
                             data.append((crc >> 8) & 0xFF)
                             message = can.Message(is_extended_id=False, is_fd = True, bitrate_switch = False, arbitration_id=id,  
                                         data=bytearray(data))
-                            self.can_fd_transmitte_queue.put(message) 
+                            self.transmit_can_message(message, logging, id) 
                     elif command['CMD'] == 'LOAD_ZERO':
                         if int(self.config['ADDRESS']) != 999:
                             data = [ConstDefine.LOADCELL_ZERO_COMMAND]                 
@@ -1363,7 +1385,7 @@ class UnitBoard:
                             data.append((crc >> 8) & 0xFF)
                             message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = False,
                                         data=bytearray(data))
-                            self.can_fd_transmitte_queue.put(message) 
+                            self.transmit_can_message(message, logging, id) 
                 self.i2c_semaphor.acquire()
                 i2cbus.write_byte_data(self.GPIOADDR1, 0x12, 0xFF)
                 i2cbus.write_byte_data(self.GPIOADDR1, 0x13, 0xFF)

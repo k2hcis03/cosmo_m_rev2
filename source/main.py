@@ -96,9 +96,11 @@ class CosmoMain(threading.Thread):
         self.i2cbus.write_byte_data(GPIOADDR2, 0x13, 0xFF)
         self.command_queue = []
         self.i2cbus.close()
-        
+
         self.unit_np_shm = None
         self.unit_semaphor = None
+        self.can_lock = threading.Lock()  # CanFDReceive/CanFDTransmitte의 동시 재초기화 방지
+        self.can_last_reinit_time = 0.0
     
     def find_tank_id_to_unit_id(self, tank_id, config):
         if tank_id == config['TANK_ID']:
@@ -112,6 +114,15 @@ class CosmoMain(threading.Thread):
             if tank_id == config['TANK_ID']:
                 return x
         return -1
+
+    def dispatch_to_unit(self, unit_id, message):
+        # unit_id의 command_queue가 가득 차 있어도(예: CAN 버스 장애로 해당 유닛 프로세스가 지연되는 경우)
+        # 전체 명령 라우팅 스레드가 죽지 않도록 예외를 여기서 흡수함.
+        try:
+            self.command_queue[unit_id].put(message, block=False)
+        except queue.Full:
+            logging.error(f"Unit board {unit_id} command queue is full, dropping {message['CMD']} command")
+
     def run(self):
         while True:   
             message = self.tcp_queue.get()  
@@ -133,7 +144,7 @@ class CosmoMain(threading.Thread):
                         message['TANK_ID'] = message['DATA'][x]['TANK_ID']
                         message['STAGE'] = message['DATA'][x]['STAGE']
                         message['STATUS'] = message['DATA'][x]['STATUS']
-                        self.command_queue[unit_id].put(message, block=False)
+                        self.dispatch_to_unit(unit_id, message)
             elif message['CMD'] == 'REF':
                 matching = False
                 for x in range(MAXUNITBOARD):
@@ -141,7 +152,7 @@ class CosmoMain(threading.Thread):
                     # if message['TANK_ID'] == str(int(config['ADDRESS']) + 100):
                     if self.find_tank_id_to_unit_id(message['TANK_ID'], config):
                         message['UNIT_ID'] = x
-                        self.command_queue[x].put(message, block=False)
+                        self.dispatch_to_unit(x, message)
                         matching = True
                 if not matching:
                     logging.info(f"Wrong Unit board id{message['TANK_ID']}")
@@ -151,7 +162,7 @@ class CosmoMain(threading.Thread):
                     config = self.common_config[f'unit_board{x}']
                     if self.find_tank_id_to_unit_id(message['UNIT_ID'], config):
                         message['UNIT_ID'] = x
-                        self.command_queue[x].put(message, block=False)
+                        self.dispatch_to_unit(x, message)
                         matching = True
                 if not matching:
                     logging.info(f"Wrong Unit board id{message['UNIT_ID']}")
@@ -161,7 +172,7 @@ class CosmoMain(threading.Thread):
                     config = self.common_config[f'unit_board{x}']
                     if self.find_tank_id_to_unit_id(message['UNIT_ID'], config):
                         message['UNIT_ID'] = x
-                        self.command_queue[x].put(message, block=False)
+                        self.dispatch_to_unit(x, message)
                         matching = True
                 if not matching:
                     logging.info(f"Wrong Unit board id{message['UNIT_ID']}")
@@ -171,7 +182,7 @@ class CosmoMain(threading.Thread):
                     config = self.common_config[f'unit_board{x}']
                     if self.find_tank_id_to_unit_id(message['UNIT_ID'], config):
                         message['UNIT_ID'] = x
-                        self.command_queue[x].put(message, block=False)
+                        self.dispatch_to_unit(x, message)
                         matching = True
                 if not matching:
                     logging.info(f"Wrong Unit board id{message['UNIT_ID']}")
@@ -183,7 +194,7 @@ class CosmoMain(threading.Thread):
                     config = self.common_config[f'unit_board{x}']
                     if self.find_tank_id_to_unit_id(message['UNIT_ID'], config):
                         message['UNIT_ID'] = x
-                        self.command_queue[x].put(message, block=False)
+                        self.dispatch_to_unit(x, message)
                         matching = True
                 if not matching:
                     logging.info(f"Wrong Unit board id{message['UNIT_ID']}")
@@ -193,7 +204,7 @@ class CosmoMain(threading.Thread):
                     config = self.common_config[f'unit_board{x}']
                     if self.find_tank_id_to_unit_id(message['UNIT_ID'], config):
                         message['UNIT_ID'] = x
-                        self.command_queue[x].put(message, block=False)
+                        self.dispatch_to_unit(x, message)
                         matching = True
                 if not matching:
                     logging.info(f"Wrong Unit board id{message['UNIT_ID']}")
@@ -203,7 +214,7 @@ class CosmoMain(threading.Thread):
                     config = self.common_config[f'unit_board{x}']
                     if self.find_tank_id_to_unit_id(message['UNIT_ID'], config):
                         message['UNIT_ID'] = x
-                        self.command_queue[x].put(message, block=False)
+                        self.dispatch_to_unit(x, message)
                         matching = True
                 if not matching:
                     logging.info(f"Wrong Unit board id{message['UNIT_ID']}")
@@ -213,7 +224,7 @@ class CosmoMain(threading.Thread):
                     config = self.common_config[f'unit_board{x}']
                     if self.find_tank_id_to_unit_id(message['UNIT_ID'], config):
                         message['UNIT_ID'] = x
-                        self.command_queue[x].put(message, block=False)
+                        self.dispatch_to_unit(x, message)
                         matching = True
                 if not matching:
                     logging.info(f"Wrong Unit board id{message['UNIT_ID']}")
@@ -224,7 +235,7 @@ class CosmoMain(threading.Thread):
                     # if message['TANK_ID'] == str(int(config['ADDRESS']) + 100):
                     if self.find_tank_id_to_unit_id(message['TANK_ID'], config):
                         message['UNIT_ID'] = x
-                        self.command_queue[x].put(message, block=False)
+                        self.dispatch_to_unit(x, message)
                         matching = True
                 time.sleep(0.05)
                 
@@ -236,7 +247,7 @@ class CosmoMain(threading.Thread):
                     config = self.common_config[f'unit_board{x}']
                     if self.find_tank_id_to_unit_id(message['UNIT_ID'], config):
                         message['UNIT_ID'] = x
-                        self.command_queue[x].put(message, block=False)
+                        self.dispatch_to_unit(x, message)
                         matching = True
                 if not matching:
                     logging.info(f"Wrong Unit board id{message['UNIT_ID']}")
@@ -246,7 +257,7 @@ class CosmoMain(threading.Thread):
                     config = self.common_config[f'unit_board{x}']
                     if self.find_tank_id_to_unit_id(message['UNIT_ID'], config):
                         message['UNIT_ID'] = x
-                        self.command_queue[x].put(message, block=False)
+                        self.dispatch_to_unit(x, message)
                         matching = True
                 if not matching:
                     logging.info(f"Wrong Unit board id{message['UNIT_ID']}")
@@ -261,7 +272,7 @@ class CosmoMain(threading.Thread):
                     config = self.common_config[f'unit_board{x}']
                     if self.find_tank_id_to_unit_id(message['UNIT_ID'], config):
                         message['UNIT_ID'] = x
-                        self.command_queue[x].put(message, block=False)
+                        self.dispatch_to_unit(x, message)
                         matching = True
                 if not matching:
                     logging.info(f"Wrong Unit board id{message['UNIT_ID']}")  
@@ -333,7 +344,8 @@ def main():
             #     time.sleep(1)
             #     print("Server is not Connected")
     except Exception as e:
-        main_func.can0.shutdown()
+        with main_func.can_lock:
+            main_func.can0.shutdown()
         shm.close()
         shm.unlink()
         for i in range(MAXUNITBOARD):

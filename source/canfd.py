@@ -10,96 +10,102 @@ import threading
 class CanFDReceive(threading.Thread):
     def __init__(self, logging, main_func) -> None:
         threading.Thread.__init__(self) 
-        self.can0 = main_func.can0
         self.main_func = main_func
         self.logging = logging
         self.daemon = True
         self.receive_queue = []
         self.error_counter = 0
-        self.max_error_threshold = 10  # 연속 10회 에러 시 재초기화
+        self.max_error_threshold = 30  # 연속 30회 에러 시 재초기화
         self.consecutive_errors = 0
         self.total_errors = 0
         self.logging.info('CanFDReceive initialized')
         
     def reinitialize_can_bus(self):
         """CAN 버스 재초기화"""
-        try:
-            self.logging.warning('Attempting to reinitialize CAN bus...')
-            
-            # 기존 CAN 버스 종료
+        with self.main_func.can_lock:
+            # 다른 스레드가 방금 재초기화를 마쳤다면 중복으로 다시 수행하지 않음
+            if time.time() - self.main_func.can_last_reinit_time < 2.0:
+                self.logging.info('CAN bus was just reinitialized by another thread, skipping duplicate reinit')
+                self.consecutive_errors = 0
+                return True
             try:
-                self.can0.shutdown()
+                self.logging.warning('Attempting to reinitialize CAN bus...')
+
+                # 기존 CAN 버스 종료
+                try:
+                    self.main_func.can0.shutdown()
+                except Exception as e:
+                    self.logging.error(f'Error during CAN shutdown: {e}')
+            
+                time.sleep(0.5)
+            
+                # CAN 인터페이스 재설정
+                os.system("sudo ifconfig can0 down")
+                time.sleep(0.2)
+                os.system("sudo ip link set can0 up type can bitrate 1000000 dbitrate 4000000 restart-ms 1000 berr-reporting on fd on")
+                os.system("sudo ifconfig can0 txqueuelen 65536")
+                time.sleep(0.5)
+            
+                # CAN 버스 재생성
+                filters = [
+                    {"can_id": 0x100, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x101, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x102, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x103, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x104, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x105, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x106, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x107, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x108, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x109, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x10A, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x10B, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x10C, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x10D, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x10E, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x10F, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x110, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x111, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x112, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x113, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x114, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x115, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x116, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x117, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x118, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x119, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x11A, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x11B, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x11C, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x11D, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x11E, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x11F, "can_mask": 0x7FF, "extended": False},
+                ]
+            
+                new_bus = can.interface.Bus(
+                    rx_fifo_size=8192,
+                    channel='can0',
+                    interface='socketcan',
+                    bitrate_switch=False,
+                    bitrate=1000000,
+                    data_bitrate=4000000,
+                    fd=True,
+                    can_filters=filters
+                )
+
+                # main_func의 can0을 갱신 (송/수신 스레드가 항상 이를 통해 참조)
+                self.main_func.can0 = new_bus
+                self.main_func.can_last_reinit_time = time.time()
+
+                # 에러 카운터 리셋
+                self.consecutive_errors = 0
+                self.logging.info('CAN bus reinitialized successfully')
+                return True
+            
             except Exception as e:
-                self.logging.error(f'Error during CAN shutdown: {e}')
-            
-            time.sleep(0.5)
-            
-            # CAN 인터페이스 재설정
-            os.system("sudo ifconfig can0 down")
-            time.sleep(0.2)
-            os.system("sudo ip link set can0 up type can bitrate 1000000 dbitrate 4000000 restart-ms 1000 berr-reporting on fd on")
-            os.system("sudo ifconfig can0 txqueuelen 65536")
-            time.sleep(0.5)
-            
-            # CAN 버스 재생성
-            filters = [
-                {"can_id": 0x100, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x101, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x102, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x103, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x104, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x105, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x106, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x107, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x108, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x109, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x10A, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x10B, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x10C, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x10D, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x10E, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x10F, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x110, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x111, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x112, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x113, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x114, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x115, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x116, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x117, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x118, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x119, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x11A, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x11B, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x11C, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x11D, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x11E, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x11F, "can_mask": 0x7FF, "extended": False},
-            ]
-            
-            self.can0 = can.interface.Bus(
-                rx_fifo_size=8192, 
-                channel='can0', 
-                interface='socketcan', 
-                bitrate_switch=False, 
-                bitrate=4000000, 
-                data_bitrate=4000000, 
-                fd=True, 
-                can_filters=filters
-            )
-            
-            # main_func의 can0도 업데이트
-            self.main_func.can0 = self.can0
-            
-            # 에러 카운터 리셋
-            self.consecutive_errors = 0
-            self.logging.info('CAN bus reinitialized successfully')
-            return True
-            
-        except Exception as e:
-            self.logging.error(f'Failed to reinitialize CAN bus: {e}')
-            return False
-    
+                self.logging.error(f'Failed to reinitialize CAN bus: {e}')
+                return False
+
     # data 리스트에 있는 값들에 대해 CRC16 계산 후 data에 추가
     def crc16(self, data: list):
         crc = 0xFFFF
@@ -116,7 +122,7 @@ class CanFDReceive(threading.Thread):
         while True:
             try:
                 # 타임아웃을 설정하여 recv 호출
-                message = self.can0.recv(timeout=1.0)
+                message = self.main_func.can0.recv(timeout=1.0)
                 
                 if message is None:
                     # 타임아웃 발생 (정상적인 경우일 수 있음)
@@ -125,10 +131,10 @@ class CanFDReceive(threading.Thread):
                 if message.is_error_frame:
                     self.consecutive_errors += 1
                     self.total_errors += 1
-                    self.logging.warning(
-                        f'CAN bus error frame (0x{message.arbitration_id:X}), '
-                        f'consecutive: {self.consecutive_errors}'
-                    )
+                    # self.logging.warning(
+                    #     f'CAN bus error frame (0x{message.arbitration_id:X}), '
+                    #     f'consecutive: {self.consecutive_errors}'
+                    # )
                     if self.consecutive_errors >= self.max_error_threshold:
                         self.logging.critical(
                             f'Too many CAN error frames ({self.consecutive_errors}), reinitializing bus'
@@ -148,6 +154,9 @@ class CanFDReceive(threading.Thread):
                     
                     # receive_queue 인덱스 범위 확인
                     if queue_index < len(self.receive_queue):
+                        if len(message.data) < 2:
+                            self.logging.warning(f'Too short frame for ID 0x{message.arbitration_id:X} (len={len(message.data)})')
+                            continue
                         try:
                             # 큐가 가득 찬 경우 처리 calc_crc = self.crc16(message.data[:-2])
                             crc = self.crc16(message.data[:-2])
@@ -216,7 +225,6 @@ class CanFDReceive(threading.Thread):
 class CanFDTransmitte(threading.Thread):
     def __init__(self, logging, main_func) -> None:
         threading.Thread.__init__(self) 
-        self.can0 = main_func.can0
         self.main_func = main_func
         self.logging = logging
         self.logging.info('CanFDTransmitte initialized')
@@ -229,84 +237,91 @@ class CanFDTransmitte(threading.Thread):
         
     def reinitialize_can_bus(self):
         """CAN 버스 재초기화"""
-        try:
-            self.logging.warning('Attempting to reinitialize CAN bus (Transmit)...')
-            
-            # 기존 CAN 버스 종료
+        with self.main_func.can_lock:
+            # 다른 스레드가 방금 재초기화를 마쳤다면 중복으로 다시 수행하지 않음
+            if time.time() - self.main_func.can_last_reinit_time < 2.0:
+                self.logging.info('CAN bus was just reinitialized by another thread, skipping duplicate reinit (Transmit)')
+                self.consecutive_errors = 0
+                return True
             try:
-                self.can0.shutdown()
+                self.logging.warning('Attempting to reinitialize CAN bus (Transmit)...')
+
+                # 기존 CAN 버스 종료
+                try:
+                    self.main_func.can0.shutdown()
+                except Exception as e:
+                    self.logging.error(f'Error during CAN shutdown: {e}')
+            
+                time.sleep(0.5)
+            
+                # CAN 인터페이스 재설정
+                os.system("sudo ifconfig can0 down")
+                time.sleep(0.2)
+                os.system("sudo ip link set can0 up type can bitrate 1000000 dbitrate 4000000 restart-ms 1000 berr-reporting on fd on")
+                os.system("sudo ifconfig can0 txqueuelen 65536")
+                time.sleep(0.5)
+            
+                # CAN 버스 재생성
+                filters = [
+                    {"can_id": 0x100, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x101, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x102, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x103, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x104, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x105, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x106, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x107, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x108, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x109, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x10A, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x10B, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x10C, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x10D, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x10E, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x10F, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x110, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x111, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x112, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x113, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x114, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x115, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x116, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x117, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x118, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x119, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x11A, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x11B, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x11C, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x11D, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x11E, "can_mask": 0x7FF, "extended": False},
+                    {"can_id": 0x11F, "can_mask": 0x7FF, "extended": False},
+                ]
+            
+                new_bus = can.interface.Bus(
+                    rx_fifo_size=8192,
+                    channel='can0',
+                    interface='socketcan',
+                    bitrate_switch=False,
+                    bitrate=1000000,
+                    data_bitrate=4000000,
+                    fd=True,
+                    can_filters=filters
+                )
+
+                # main_func의 can0을 갱신 (송/수신 스레드가 항상 이를 통해 참조)
+                self.main_func.can0 = new_bus
+                self.main_func.can_last_reinit_time = time.time()
+
+                # 에러 카운터 리셋
+                self.consecutive_errors = 0
+                self.logging.info('CAN bus reinitialized successfully (Transmit)')
+                return True
+            
             except Exception as e:
-                self.logging.error(f'Error during CAN shutdown: {e}')
-            
-            time.sleep(0.5)
-            
-            # CAN 인터페이스 재설정
-            os.system("sudo ifconfig can0 down")
-            time.sleep(0.2)
-            os.system("sudo ip link set can0 up type can bitrate 1000000 dbitrate 4000000 restart-ms 1000 berr-reporting on fd on")
-            os.system("sudo ifconfig can0 txqueuelen 65536")
-            time.sleep(0.5)
-            
-            # CAN 버스 재생성
-            filters = [
-                {"can_id": 0x100, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x101, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x102, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x103, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x104, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x105, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x106, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x107, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x108, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x109, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x10A, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x10B, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x10C, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x10D, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x10E, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x10F, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x110, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x111, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x112, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x113, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x114, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x115, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x116, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x117, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x118, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x119, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x11A, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x11B, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x11C, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x11D, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x11E, "can_mask": 0x7FF, "extended": False},
-                {"can_id": 0x11F, "can_mask": 0x7FF, "extended": False},
-            ]
-            
-            self.can0 = can.interface.Bus(
-                rx_fifo_size=8192, 
-                channel='can0', 
-                interface='socketcan', 
-                bitrate_switch=False, 
-                bitrate=1000000, 
-                data_bitrate=4000000, 
-                fd=True, 
-                can_filters=filters
-            )
-            
-            # main_func의 can0도 업데이트
-            self.main_func.can0 = self.can0
-            
-            # 에러 카운터 리셋
-            self.consecutive_errors = 0
-            self.logging.info('CAN bus reinitialized successfully (Transmit)')
-            return True
-            
-        except Exception as e:
-            self.logging.error(f'Failed to reinitialize CAN bus (Transmit): {e}')
-            return False
-    
-    def run(self): 
+                self.logging.error(f'Failed to reinitialize CAN bus (Transmit): {e}')
+                return False
+
+    def run(self):
         while True:
             message = None
             try:
@@ -319,7 +334,7 @@ class CanFDTransmitte(threading.Thread):
                 
                 while retry_count <= self.max_retries and not sent_successfully:
                     try:
-                        self.can0.send(message, timeout=0.5)
+                        self.main_func.can0.send(message)
                         sent_successfully = True
                         # 성공 시 에러 카운터 리셋
                         self.consecutive_errors = 0
@@ -356,9 +371,20 @@ class CanFDTransmitte(threading.Thread):
                     self.logging.critical(f'Too many consecutive send errors ({self.consecutive_errors}), reinitializing bus')
                     if self.reinitialize_can_bus():
                         time.sleep(1.0)
+                        if not sent_successfully:
+                            # 버스가 방금 복구됐으므로 메시지 유실을 막기 위해 한 번 더 시도
+                            try:
+                                self.main_func.can0.send(message)
+                                sent_successfully = True
+                                self.consecutive_errors = 0
+                            except Exception as e:
+                                self.logging.error(f'Retry after bus reinitialization also failed (arbitration_id=0x{message.arbitration_id:X}): {e}')
                     else:
                         time.sleep(5.0)
-            
+
+                if not sent_successfully:
+                    self.logging.error(f'Message permanently dropped (arbitration_id=0x{message.arbitration_id:X}, data={bytes(message.data).hex()})')
+
             except queue.Empty:
                 # 큐가 비어있음 (정상)
                 continue
@@ -368,7 +394,7 @@ class CanFDTransmitte(threading.Thread):
                 self.consecutive_errors += 1
                 self.total_errors += 1
                 self.logging.error(f'Unexpected error in transmit: {type(e).__name__}: {e} (consecutive errors: {self.consecutive_errors})')
-                
+
                 if self.consecutive_errors >= self.max_error_threshold:
                     self.logging.critical(f'Too many consecutive errors ({self.consecutive_errors}), reinitializing bus')
                     if self.reinitialize_can_bus():
@@ -377,3 +403,12 @@ class CanFDTransmitte(threading.Thread):
                         time.sleep(5.0)
                 else:
                     time.sleep(0.5)
+
+                # 다른 스레드의 재초기화 도중이었을 수 있으므로(예: fd=-1 ValueError), 큐에서 이미 꺼낸
+                # 메시지를 재시도 없이 버리지 않도록 마지막으로 한 번 더 전송을 시도
+                if message is not None:
+                    try:
+                        self.main_func.can0.send(message)
+                        self.consecutive_errors = 0
+                    except Exception as e2:
+                        self.logging.error(f'Message permanently dropped (arbitration_id=0x{message.arbitration_id:X}, data={bytes(message.data).hex()}): {e2}')

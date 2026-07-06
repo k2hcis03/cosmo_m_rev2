@@ -735,14 +735,14 @@ class TcpClientThread(threading.Thread):
                             receive_buffer += part.decode('UTF-8')
                         except UnicodeDecodeError:
                             # 불완전한 UTF-8 - 버퍼에 바이트로 임시 저장 후 재시도
-                            self.logging.debug('Incomplete UTF-8 sequence, waiting for more data')
+                            self.logging.info('Incomplete UTF-8 sequence, waiting for more data')
                             continue
                         
                         # 버퍼에서 완전한 JSON 객체들을 추출
                         json_objects, receive_buffer = extract_json_objects(receive_buffer)
 
                         if json_objects and any(d.get('CMD') != 'PING' for d in json_objects):
-                            self.logging.debug(f'Received {len(part)} bytes, buffer size: {len(receive_buffer)} bytes')
+                            self.logging.info(f'Received {len(part)} bytes, buffer size: {len(receive_buffer)} bytes')
 
                         if not json_objects:
                             # 완전한 JSON이 없으면 더 기다림
@@ -754,7 +754,7 @@ class TcpClientThread(threading.Thread):
                         for data in json_objects:
                             try:
                                 if data.get('CMD') != 'PING':
-                                    self.logging.debug(f'Processing JSON object: CMD={data.get("CMD", "unknown")}')
+                                    self.logging.info(f'Processing JSON object: CMD={data.get("CMD", "unknown")}')
                                 
                                 # TCP 큐에 데이터 전달
                                 try:
