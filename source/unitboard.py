@@ -111,15 +111,15 @@ class UnitBoardCanFdReceive(threading.Thread):
                             T = -10 + (I_mA - 4) * (110) / 16                   #-10 ~ 100 C -> 4mA ~ 20mA  유닛보드에서 * 1000이 되므로 여기서 4->4000, 16->16
                             self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP8 + id*self.shared_memory_size] = (np.int32)(T * 1000)
                             
-                            # ADC 값
-                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC1 + id*self.shared_memory_size] = (np.float32)(message.data[2] << 8 | message.data[3])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
-                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC2 + id*self.shared_memory_size] = (np.float32)(message.data[4] << 8 | message.data[5])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
-                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC3 + id*self.shared_memory_size] = (np.float32)(message.data[6] << 8 | message.data[7])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
-                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC4 + id*self.shared_memory_size] = (np.float32)(message.data[8] << 8 | message.data[9])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
-                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC5 + id*self.shared_memory_size] = (np.float32)(message.data[10] << 8 | message.data[11])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
-                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC6 + id*self.shared_memory_size] = (np.float32)(message.data[12] << 8 | message.data[13])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
-                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC7 + id*self.shared_memory_size] = (np.float32)(message.data[14] << 8 | message.data[15])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
-                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC8 + id*self.shared_memory_size] = (np.float32)(message.data[16] << 8 | message.data[17])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
+                            # ADC 값 (원시값 그대로 저장. 원시값 자체가 mA * 1000 스케일이므로 사용하는 곳에서 0.001을 곱해 mA로 환산함)
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC1 + id*self.shared_memory_size] = (np.int32)(message.data[2] << 8 | message.data[3])
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC2 + id*self.shared_memory_size] = (np.int32)(message.data[4] << 8 | message.data[5])
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC3 + id*self.shared_memory_size] = (np.int32)(message.data[6] << 8 | message.data[7])
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC4 + id*self.shared_memory_size] = (np.int32)(message.data[8] << 8 | message.data[9])
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC5 + id*self.shared_memory_size] = (np.int32)(message.data[10] << 8 | message.data[11])
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC6 + id*self.shared_memory_size] = (np.int32)(message.data[12] << 8 | message.data[13])
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC7 + id*self.shared_memory_size] = (np.int32)(message.data[14] << 8 | message.data[15])
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC8 + id*self.shared_memory_size] = (np.int32)(message.data[16] << 8 | message.data[17])
                             self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_GPO0_7 + id*self.shared_memory_size] = (np.int32)(message.data[28])     #GPO 7~0 GPO 현재 설정 값 (active high)
                             self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_GPI0_7 + id*self.shared_memory_size] = (np.int32)(message.data[29])    #GPI 7~0  엔코더 사용 상태 값 (active low)
                             
@@ -164,7 +164,7 @@ class UnitBoardCanFdReceive(threading.Thread):
                                     for x in range(int(self.config.get('ADC_NUM', 0))):
                                         adc_usage = int(self.config.get(f'ADC_{x+1}', 0))
                                         if adc_usage == 2:    #유량센서이면
-                                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_FLOWER + id*self.shared_memory_size] = self.shared_memory_u[(ConstDefine.SHARED_MEMORY_OFFSET_ADC1 + x) + id*self.shared_memory_size] * 1000
+                                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_FLOWER + id*self.shared_memory_size] = self.shared_memory_u[(ConstDefine.SHARED_MEMORY_OFFSET_ADC1 + x) + id*self.shared_memory_size]
                                             analog_flower_sensor = True
                                     # flower 센서가 485라면
                                     if analog_flower_sensor == False:
@@ -1338,9 +1338,9 @@ class UnitBoard:
                                     data.append((crc >> 8) & 0xFF)
                                     message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = False,
                                                 data=bytearray(data))
-                                    time.sleep(0.015)    # 유닛보드가 펌웨어 업데이트 명령어를 처리할 수 있도록 15ms 대기
+                                    time.sleep(0.1)    # 유닛보드가 펌웨어 업데이트 명령어를 처리할 수 있도록 100ms 대기
                                     offset += 56
-                                    print(f'index: {index}')
+                                    print(f'index: {index}', "\n")
                                     index += 1
                                     
                                     if is_last:

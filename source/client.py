@@ -271,7 +271,6 @@ class UnitBoardGetStatus(threading.Thread):
                                 flow_sensor = 0.
                             self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{2000+x_index}","VALUE":f"{flow_sensor:0.2F}"}) # 0~300l/min
                             x_index += 1
-
                     # CT 센서 전송 기능  센서 번호 김휴정 박사와 협의 필요 
                     for x in range(int(unit_config.get('ADC_NUM', 0))):
                         if x < len(ct_index):
