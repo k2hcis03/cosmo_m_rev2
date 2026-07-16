@@ -129,20 +129,32 @@ class CanFDReceive(threading.Thread):
                     continue
                 
                 if message.is_error_frame:
-                    self.consecutive_errors += 1
+                    err_id = message.arbitration_id
+                    data = message.data
+                    tec = data[6] if len(data) > 6 else 0
+
+                    # self.consecutive_errors += 1
                     self.total_errors += 1
                     # self.logging.warning(
                     #     f'CAN bus error frame (0x{message.arbitration_id:X}), '
                     #     f'consecutive: {self.consecutive_errors}'
                     # )
-                    if self.consecutive_errors >= self.max_error_threshold:
-                        self.logging.critical(
-                            f'Too many CAN error frames ({self.consecutive_errors}), reinitializing bus'
-                        )
+                    # if self.consecutive_errors >= self.max_error_threshold:
+                    if err_id & 0x00000040:  # BUSOFF
+                        # self.logging.critical(
+                        #     f'Too many CAN error frames ({self.consecutive_errors}), reinitializing bus'
+                        # )
+                        # if self.reinitialize_can_bus():
+                        #     time.sleep(1.0)
+                        # else:
+                        #     time.sleep(5.0)
+                        self.logging.critical(f'BUS-OFF detected (TEC={tec}), restarting')
                         if self.reinitialize_can_bus():
-                            time.sleep(1.0)
-                        else:
-                            time.sleep(5.0)
+                            time.sleep(0.5)
+                    else:
+                        # 나머지는 회복성 에러 → 로그만, 재초기화 안 함
+                        # self.logging.warning(f'recoverable err flags=0x{err_id:08X} TEC={tec}')
+                        time.sleep(0.1)
                     continue
 
                 # 정상 수신 시 에러 카운터 리셋
@@ -179,33 +191,55 @@ class CanFDReceive(threading.Thread):
             
             except can.CanError as e:
                 # CAN 프로토콜 에러
-                self.consecutive_errors += 1
+                # self.consecutive_errors += 1
+                err_id = message.arbitration_id
+                data = message.data
+                tec = data[6] if len(data) > 6 else 0
                 self.total_errors += 1
                 # self.logging.error(f'CAN error in receive: {e} (consecutive errors: {self.consecutive_errors})')
                 
-                if self.consecutive_errors >= self.max_error_threshold:
-                    self.logging.critical(f'Too many consecutive CAN errors ({self.consecutive_errors}), reinitializing bus')
-                    if self.reinitialize_can_bus():
-                        time.sleep(1.0)
-                    else:
-                        time.sleep(5.0)
+                # if self.consecutive_errors >= self.max_error_threshold:
+                #     self.logging.critical(f'Too many consecutive CAN errors ({self.consecutive_errors}), reinitializing bus')
+                #     if self.reinitialize_can_bus():
+                #         time.sleep(1.0)
+                #     else:
+                #         time.sleep(5.0)
+                # else:
+                #     time.sleep(0.1)
+                if err_id & 0x00000040:  # BUSOFF
+                    self.logging.critical(f'BUS-OFF detected (TEC={tec}), restarting')
+                    self.reinitialize_can_bus()
+                    time.sleep(0.5)
                 else:
-                    time.sleep(0.1)
+                    # 나머지는 회복성 에러 → 로그만, 재초기화 안 함
+                    time.sleep(0.5)
+                    # self.logging.warning(f'recoverable err flags=0x{err_id:08X} TEC={tec}')
             
             except OSError as e:
                 # 네트워크/소켓 에러 (TX overflow 등)
-                self.consecutive_errors += 1
+                # self.consecutive_errors += 1
+                err_id = message.arbitration_id
+                data = message.data
+                tec = data[6] if len(data) > 6 else 0
                 self.total_errors += 1
-                self.logging.error(f'OSError in receive: {e} (consecutive errors: {self.consecutive_errors})')
+                # self.logging.error(f'CAN error in receive: {e} (consecutive errors: {self.consecutive_errors})')
                 
-                if self.consecutive_errors >= self.max_error_threshold:
-                    self.logging.critical(f'Too many consecutive OS errors ({self.consecutive_errors}), reinitializing bus')
-                    if self.reinitialize_can_bus():
-                        time.sleep(1.0)
-                    else:
-                        time.sleep(5.0)
+                # if self.consecutive_errors >= self.max_error_threshold:
+                #     self.logging.critical(f'Too many consecutive CAN errors ({self.consecutive_errors}), reinitializing bus')
+                #     if self.reinitialize_can_bus():
+                #         time.sleep(1.0)
+                #     else:
+                #         time.sleep(5.0)
+                # else:
+                #     time.sleep(0.1)
+                if err_id & 0x00000040:  # BUSOFF
+                    self.logging.critical(f'BUS-OFF detected (TEC={tec}), restarting')
+                    self.reinitialize_can_bus()
+                    time.sleep(0.5)
                 else:
-                    time.sleep(0.1)
+                    # 나머지는 회복성 에러 → 로그만, 재초기화 안 함
+                    time.sleep(0.5)
+                    # self.logging.warning(f'recoverable err flags=0x{err_id:08X} TEC={tec}')
             
             except Exception as e:
                 # 기타 예외
@@ -213,14 +247,29 @@ class CanFDReceive(threading.Thread):
                 self.total_errors += 1
                 self.logging.error(f'Unexpected error in receive: {type(e).__name__}: {e} (consecutive errors: {self.consecutive_errors})')
                 
-                if self.consecutive_errors >= self.max_error_threshold:
-                    self.logging.critical(f'Too many consecutive errors ({self.consecutive_errors}), reinitializing bus')
-                    if self.reinitialize_can_bus():
-                        time.sleep(1.0)
-                    else:
-                        time.sleep(5.0)
-                else:
+                # self.consecutive_errors += 1
+                err_id = message.arbitration_id
+                data = message.data
+                tec = data[6] if len(data) > 6 else 0
+                self.total_errors += 1
+                # self.logging.error(f'CAN error in receive: {e} (consecutive errors: {self.consecutive_errors})')
+                
+                # if self.consecutive_errors >= self.max_error_threshold:
+                #     self.logging.critical(f'Too many consecutive CAN errors ({self.consecutive_errors}), reinitializing bus')
+                #     if self.reinitialize_can_bus():
+                #         time.sleep(1.0)
+                #     else:
+                #         time.sleep(5.0)
+                # else:
+                #     time.sleep(0.1)
+                if err_id & 0x00000040:  # BUSOFF
+                    self.logging.critical(f'BUS-OFF detected (TEC={tec}), restarting')
+                    self.reinitialize_can_bus()
                     time.sleep(0.5)
+                else:
+                    # 나머지는 회복성 에러 → 로그만, 재초기화 안 함
+                    time.sleep(0.5)
+                    # self.logging.warning(f'recoverable err flags=0x{err_id:08X} TEC={tec}')
 
 class CanFDTransmitte(threading.Thread):
     def __init__(self, logging, main_func) -> None:

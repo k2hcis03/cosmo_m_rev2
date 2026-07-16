@@ -160,74 +160,74 @@ class CosmoMain(threading.Thread):
                 matching = False
                 for x in range(MAXUNITBOARD):
                     config = self.common_config[f'unit_board{x}']
-                    if self.find_tank_id_to_unit_id(message['UNIT_ID'], config):
+                    if self.find_tank_id_to_unit_id(message['TANK_ID'], config):
                         message['UNIT_ID'] = x
                         self.dispatch_to_unit(x, message)
                         matching = True
                 if not matching:
-                    logging.info(f"Wrong Unit board id{message['UNIT_ID']}")
+                    logging.info(f"Wrong Unit board id{message['TANK_ID']}")
             elif message['CMD'] == 'SET_GPIO':
                 matching = False
                 for x in range(MAXUNITBOARD):
                     config = self.common_config[f'unit_board{x}']
-                    if self.find_tank_id_to_unit_id(message['UNIT_ID'], config):
+                    if self.find_tank_id_to_unit_id(message['TANK_ID'], config):
                         message['UNIT_ID'] = x
                         self.dispatch_to_unit(x, message)
                         matching = True
                 if not matching:
-                    logging.info(f"Wrong Unit board id{message['UNIT_ID']}")
+                    logging.info(f"Wrong Unit board id{message['TANK_ID']}")
             elif message['CMD'] == 'GET_ADC':  
                 matching = False
                 for x in range(MAXUNITBOARD):
                     config = self.common_config[f'unit_board{x}']
-                    if self.find_tank_id_to_unit_id(message['UNIT_ID'], config):
+                    if self.find_tank_id_to_unit_id(message['TANK_ID'], config):
                         message['UNIT_ID'] = x
                         self.dispatch_to_unit(x, message)
                         matching = True
                 if not matching:
-                    logging.info(f"Wrong Unit board id{message['UNIT_ID']}")
+                    logging.info(f"Wrong Unit board id{message['TANK_ID']}")
             elif message['CMD'] == 'GET_STATUS':  # 2025.12.09 - @K2H CAN FD 멀티 마스터 구현으로 여기 호출 안됨
                 pass
             elif message['CMD'] == 'START_TEMP':
                 matching = False
                 for x in range(MAXUNITBOARD):
                     config = self.common_config[f'unit_board{x}']
-                    if self.find_tank_id_to_unit_id(message['UNIT_ID'], config):
+                    if self.find_tank_id_to_unit_id(message['TANK_ID'], config):
                         message['UNIT_ID'] = x
                         self.dispatch_to_unit(x, message)
                         matching = True
                 if not matching:
-                    logging.info(f"Wrong Unit board id{message['UNIT_ID']}")
+                    logging.info(f"Wrong Unit board id{message['TANK_ID']}")
             elif message['CMD'] == 'STOP_TEMP':
                 matching = False
                 for x in range(MAXUNITBOARD):
                     config = self.common_config[f'unit_board{x}']
-                    if self.find_tank_id_to_unit_id(message['UNIT_ID'], config):
+                    if self.find_tank_id_to_unit_id(message['TANK_ID'], config):
                         message['UNIT_ID'] = x
                         self.dispatch_to_unit(x, message)
                         matching = True
                 if not matching:
-                    logging.info(f"Wrong Unit board id{message['UNIT_ID']}")
+                    logging.info(f"Wrong Unit board id{message['TANK_ID']}")
             elif message['CMD'] == 'TEMP_RPM':
                 matching = False
                 for x in range(MAXUNITBOARD):
                     config = self.common_config[f'unit_board{x}']
-                    if self.find_tank_id_to_unit_id(message['UNIT_ID'], config):
+                    if self.find_tank_id_to_unit_id(message['TANK_ID'], config):
                         message['UNIT_ID'] = x
                         self.dispatch_to_unit(x, message)
                         matching = True
                 if not matching:
-                    logging.info(f"Wrong Unit board id{message['UNIT_ID']}")
+                    logging.info(f"Wrong Unit board id{message['TANK_ID']}")
             elif message['CMD'] == 'WEIGHT_VALVE':
                 matching = False
                 for x in range(MAXUNITBOARD):
                     config = self.common_config[f'unit_board{x}']
-                    if self.find_tank_id_to_unit_id(message['UNIT_ID'], config):
+                    if self.find_tank_id_to_unit_id(message['TANK_ID'], config):
                         message['UNIT_ID'] = x
                         self.dispatch_to_unit(x, message)
                         matching = True
                 if not matching:
-                    logging.info(f"Wrong Unit board id{message['UNIT_ID']}")
+                    logging.info(f"Wrong Unit board id{message['TANK_ID']}")
             elif message['CMD'] == 'CTRL':
                 matching = False
                 for x in range(MAXUNITBOARD):
@@ -245,22 +245,22 @@ class CosmoMain(threading.Thread):
                 matching = False
                 for x in range(MAXUNITBOARD):
                     config = self.common_config[f'unit_board{x}']
-                    if self.find_tank_id_to_unit_id(message['UNIT_ID'], config):
+                    if self.find_tank_id_to_unit_id(message['TANK_ID'], config):
                         message['UNIT_ID'] = x
                         self.dispatch_to_unit(x, message)
                         matching = True
                 if not matching:
-                    logging.info(f"Wrong Unit board id{message['UNIT_ID']}")
+                    logging.info(f"Wrong Unit board id{message['TANK_ID']}")
             elif message['CMD'] == 'GET_VERSION':
                 matching = False
                 for x in range(MAXUNITBOARD):
                     config = self.common_config[f'unit_board{x}']
-                    if self.find_tank_id_to_unit_id(message['UNIT_ID'], config):
+                    if self.find_tank_id_to_unit_id(message['TANK_ID'], config):
                         message['UNIT_ID'] = x
                         self.dispatch_to_unit(x, message)
                         matching = True
                 if not matching:
-                    logging.info(f"Wrong Unit board id{message['UNIT_ID']}")
+                    logging.info(f"Wrong Unit board id{message['TANK_ID']}")
 
                 # if message['UNIT_ID'] >= 0 and message['UNIT_ID'] < MAXUNITBOARD:       # 0 ~ MAXUNITBOARD-1
                 #     self.command_queue[message['UNIT_ID']].put(message, block=False)
@@ -275,7 +275,17 @@ class CosmoMain(threading.Thread):
                         self.dispatch_to_unit(x, message)
                         matching = True
                 if not matching:
-                    logging.info(f"Wrong Unit board id{message['UNIT_ID']}")  
+                    logging.info(f"Wrong Unit board id{message['TANK_ID']}")  
+            elif message['CMD'] == 'LOAD_ZERO':
+                matching = False
+                for x in range(MAXUNITBOARD):
+                    config = self.common_config[f'unit_board{x}']
+                    if self.find_tank_id_to_unit_id(message['TANK_ID'], config):
+                        message['UNIT_ID'] = x
+                        self.dispatch_to_unit(x, message)
+                        matching = True
+                if not matching:
+                    logging.info(f"Wrong Unit board id{message['TANK_ID']}")
 def main():
     config_file = configparser.ConfigParser()  ## 클래스 객체 생성
     config_file.read('/home/pi/Projects/cosmo-m/config/config.ini')  ## 파일 읽기
