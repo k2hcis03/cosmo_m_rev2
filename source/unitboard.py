@@ -335,6 +335,11 @@ class UnitBoardCanFdReceive(threading.Thread):
                             self.socket_send_queue.put(ack_msg, block=False)
                             self.logging.warning(f'id: {id} unit board BOOT_UNIT_BOARD_COMMAND is wrong response') 
                         self.unit_board_instance.unit_board_initialize(id, self.logging)
+                    elif message.data[0] == ConstDefine.SET_GPIO_EX_COMMAND:
+                        if message.data[1] == 1:            # 1 : 정상, 0 : 오류
+                            self.logging.info(f'id: {id} Received message: SET_GPIO_EX_COMMAND')                                 
+                        else:
+                            self.logging.warning(f'id: {id} unit board SET_GPIO_EX_COMMAND is wrong response')
                     # LED를 
                     message = {"UNIT_ID" : id,                  
                                 "CMD":"LED_STATUS"}
@@ -1100,7 +1105,8 @@ class UnitBoard:
                                 data.append(0)
                             else:
                                 data.append(1)
-                                
+
+                            data.append(int(self.config['SOLVALVE3']))  # 인버터 MC 제어 SMPS 파워 소비 방지    
                             crc = self.crc16(data)
                             data.append(crc & 0xFF)
                             data.append((crc >> 8) & 0xFF)
@@ -1289,6 +1295,24 @@ class UnitBoard:
                                                 "WEIGHT" : temp, 
                                                 "ONTIME" : ontime}  
                                 command_queue.put(message, block=False)
+                            elif command['CTRL'][0]['SENSOR_ID'] == '1900' or command['CTRL'][0]['SENSOR_ID'] == '1901' or command['CTRL'][0]['SENSOR_ID'] == '1902':    # 물탱크 모터 번호 1900 = 원수 1901 = 칠러1 1902 = 칠러2 
+                               if self.config['TANK_TYPE'] == '6':   # 물탱크 유닛보드이면
+                                    if command['CTRL'][0]['SENSOR_ID'] == '1900':
+                                        x = self.config["SOLVALVE1"]
+                                    elif command['CTRL'][0]['SENSOR_ID'] == '1901':
+                                        x = self.config["SOLVALVE2"]
+                                    elif command['CTRL'][0]['SENSOR_ID'] == '1902':
+                                        x = self.config["SOLVALVE3"]
+                                        
+                                    if command['CTRL'][0]['PARAM0'] == 'ON':
+                                        value = ON
+                                    else:
+                                        value = OFF
+                                    message = {"UNIT_ID" : id,                  
+                                                "CMD":"SET_GPIO_EX",
+                                                "CHANNEL": x,
+                                                "VALUE" : value}
+                                    command_queue.put(message, block=False) 
                     elif command['CMD'] == 'FIRMWARE_UPDATE':                      
                         if int(self.config['ADDRESS']) != 999:
                             if self.status_control_queue:
@@ -1385,6 +1409,21 @@ class UnitBoard:
                             data.append((crc >> 8) & 0xFF)
                             message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = False,
                                         data=bytearray(data))
+                            self.transmit_can_message(message, logging, id) 
+                    elif command['CMD'] == 'SET_GPIO_EX':
+                        if int(self.config['ADDRESS']) != 999:
+                            data = [ConstDefine.SET_GPIO_EX_COMMAND]
+                            data.append(int(command['CHANNEL']))
+                            data.append(int(command['VALUE']))
+                            crc = self.crc16(data)
+                            data.append(crc & 0xFF)
+                            data.append((crc >> 8) & 0xFF)
+                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = False,
+                                        data=bytearray(data))
+                            
+                            while not can_fd_receive_queue.empty():
+                                can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
+                
                             self.transmit_can_message(message, logging, id) 
                 self.i2c_semaphor.acquire()
                 i2cbus.write_byte_data(self.GPIOADDR1, 0x12, 0xFF)

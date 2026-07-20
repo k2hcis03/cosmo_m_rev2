@@ -387,7 +387,7 @@ class UnitBoardGetStatus(threading.Thread):
         try:
             common_config = self.config_file['common']
             ip = common_config.get('HOST', 'localhost')
-            port = int(common_config.get('PORT1', 5001))
+            port = int(common_config.get('PORT1', 7000))
             SERVER_ADDR = (ip, port)
             timeout_seconds = 5
             
@@ -599,7 +599,8 @@ class TcpClientThread(threading.Thread):
         self.socket_send_queue = socket_send_queue
         self.socket_event = socket_event
         self.status_control_queue = status_control_queue
-        
+        self.status_thread = None  # UnitBoardGetStatus(송신) 스레드, 중복 생성 방지용으로 추적
+
         # 에러 카운터
         self.consecutive_errors = 0
         self.max_error_threshold = 10
@@ -668,42 +669,67 @@ class TcpClientThread(threading.Thread):
             self.i2c_write_with_retry(self.GPIOADDR2, 0x13, 0x00)
     
     def run(self):
-        """수신 스레드 메인 루프 with 예외 처리"""
+        """수신 스레드 메인 루프. 내부에서 어떤 예외가 발생해도 스레드 자체는 종료하지 않고
+        _receive_loop()를 다시 호출해 재시작한다 (스레드 재생성 없이 자체 복구)."""
         self.logging.info('TcpClientThread 시작')
-        
+        receive_event = threading.Event()
+        outer_reconnect_delay = 1
+        outer_max_reconnect_delay = 60
+
+        while True:
+            try:
+                self._receive_loop(receive_event)
+            except Exception as e:
+                self.logging.critical(f'TcpClientThread 메인 루프에서 예외 발생, 스레드를 유지한 채 재시작합니다: {e}')
+                self.logging.critical(traceback.format_exc())
+                outer_reconnect_delay = min(outer_reconnect_delay * 2, outer_max_reconnect_delay)
+                time.sleep(outer_reconnect_delay)
+            else:
+                outer_reconnect_delay = 1
+
+    def _ensure_status_thread(self, receive_event):
+        """UnitBoardGetStatus(송신) 스레드가 살아있는지 확인하고 없으면 새로 시작한다.
+        이미 살아있는 스레드가 있으면 재사용해 중복 생성을 막는다."""
+        if self.status_thread is not None and self.status_thread.is_alive():
+            return
+        status_thread = UnitBoardGetStatus(self.logging, self.tcp_queue, self.max_unit_board,
+                                            self.shared_memory, self.socket_send_queue, receive_event,
+                                            self.status_control_queue)
+        status_thread.start()
+        self.status_thread = status_thread
+        self.logging.info('UnitBoardGetStatus thread started')
+
+    def _receive_loop(self, receive_event):
+        """수신 소켓 연결/재연결을 담당하는 실제 루프 with 예외 처리"""
         # Config 파일 읽기 with 예외 처리
         config_file = configparser.ConfigParser()
         try:
             config_result = config_file.read('/home/pi/Projects/cosmo-m/config/config.ini')
             if not config_result:
                 self.logging.error('Config file not found, using default values')
-                config_file['common'] = {'HOST': 'localhost', 'PORT2': '5002'}
+                config_file['common'] = {'HOST': 'localhost', 'PORT2': '7001'}
         except Exception as e:
             self.logging.error(f'Failed to read config file: {e}')
-            config_file['common'] = {'HOST': 'localhost', 'PORT2': '5002'}
-        
+            config_file['common'] = {'HOST': 'localhost', 'PORT2': '7001'}
+
         common_config = config_file['common']
-        
-        # Status 스레드 시작
-        receive_event = threading.Event()
-        try:
-            status_thread = UnitBoardGetStatus(self.logging, self.tcp_queue, self.max_unit_board, 
-                                              self.shared_memory, self.socket_send_queue, receive_event, self.status_control_queue)
-            status_thread.start()
-            self.logging.info('UnitBoardGetStatus thread started')
-        except Exception as e:
-            self.logging.error(f'Failed to start status thread: {e}')
-            return
-                    
+
+        # Status 스레드가 살아있는지 확인하고 없으면 시작 (중복 생성 방지)
+        self._ensure_status_thread(receive_event)
+
         ip = common_config.get('HOST', 'localhost')
-        port = int(common_config.get('PORT2', 5002))
+        try:
+            port = int(common_config.get('PORT2', 5002))
+        except (TypeError, ValueError) as e:
+            self.logging.error(f'Invalid PORT2 value, using default 5002: {e}')
+            port = 5002
         SERVER_ADDR = (ip, port)
         timeout_seconds = 20
         old_data = None
         same_data_cnt = 0
         reconnect_delay = 1
         max_reconnect_delay = 60
-        
+
         while True:
             client = None
             try:
