@@ -340,6 +340,11 @@ class UnitBoardCanFdReceive(threading.Thread):
                             self.logging.info(f'id: {id} Received message: SET_GPIO_EX_COMMAND')                                 
                         else:
                             self.logging.warning(f'id: {id} unit board SET_GPIO_EX_COMMAND is wrong response')
+                    elif message.data[0] == ConstDefine.PING_UNIT_BOARD_COMMAND:
+                        if message.data[1] == 1:            # 1 : 정상, 0 : 오류
+                            self.logging.info(f'id: {id} Received message: PING_UNIT_BOARD_COMMAND')                                 
+                        else:
+                            self.logging.warning(f'id: {id} unit board PING_UNIT_BOARD_COMMAND is wrong response')
                     # LED를 
                     message = {"UNIT_ID" : id,                  
                                 "CMD":"LED_STATUS"}
@@ -903,8 +908,9 @@ class UnitBoard:
             self.config, self.common_config, command_queue)
             water_tank_thread.start()
             logging.info(f'id: {id} UnitBoard WaterWeight Thread Run')
+        last_version_poll = time.time()   # GET_VERSION 주기 요청을 위한 마지막 전송 시각
         while True:
-            try: 
+            try:
                 global command
                 command = command_queue.get()
                 
@@ -1050,10 +1056,6 @@ class UnitBoard:
                             data.append((crc >> 8) & 0xFF)
                             message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = False,
                                         data=bytearray(data))
-                            
-                            while not can_fd_receive_queue.empty():
-                                can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
-                
                             self.transmit_can_message(message, logging, id) 
                     elif command['CMD'] == 'SET_GPIO':
                         if int(self.config['ADDRESS']) != 999:
@@ -1068,10 +1070,6 @@ class UnitBoard:
                             data.append((crc >> 8) & 0xFF)
                             message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = False,
                                         data=bytearray(data))
-                            
-                            while not can_fd_receive_queue.empty():
-                                can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
-                
                             self.transmit_can_message(message, logging, id) 
                     elif command['CMD'] == 'GET_STATUS':    # 2025.12.09 - @K2H CAN FD 멀티 마스터 구현으로 여기 호출 안됨
                         pass
@@ -1420,18 +1418,26 @@ class UnitBoard:
                             data.append((crc >> 8) & 0xFF)
                             message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = False,
                                         data=bytearray(data))
-                            
-                            while not can_fd_receive_queue.empty():
-                                can_fd_receive_queue.get()             # as docs say: Remove and return an item from the queue.
-                
+                            self.transmit_can_message(message, logging, id)
+                    elif command['CMD'] == 'PING_UNIT_BOARD':
+                        if int(self.config['ADDRESS']) != 999:
+                            data = [ConstDefine.PING_UNIT_BOARD_COMMAND]                 
+                            crc = self.crc16(data)
+                            data.append(crc & 0xFF)
+                            data.append((crc >> 8) & 0xFF)
+                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = False,
+                                        data=bytearray(data))
                             self.transmit_can_message(message, logging, id) 
-                self.i2c_semaphor.acquire()
-                i2cbus.write_byte_data(self.GPIOADDR1, 0x12, 0xFF)
-                i2cbus.write_byte_data(self.GPIOADDR1, 0x13, 0xFF)
-                i2cbus.write_byte_data(self.GPIOADDR2, 0x12, 0xFF)
-                i2cbus.write_byte_data(self.GPIOADDR2, 0x13, 0xFF)
-                i2cbus.close()
-                self.i2c_semaphor.release()
+                #
+                # 2초마다 유닛보드 펌웨어 버전(GET_VERSION)을 요청한다.
+                # command_queue.get()으로 블로킹되는 루프 특성상, 명령이 들어와 루프가 돌 때
+                # 경과 시간을 확인하여 2초가 지났으면 GET_VERSION 명령을 큐에 넣는다.
+                if time.time() - last_version_poll >= 2:
+                    last_version_poll = time.time()
+                    message = {"UNIT_ID": id,
+                               "CMD": "PING_UNIT_BOARD",
+                               "SEND": False}
+                    command_queue.put(message, block=False)
             except Exception as e:
                 print(e)
                 i2cbus.close()
