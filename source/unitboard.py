@@ -137,6 +137,12 @@ class UnitBoardCanFdReceive(threading.Thread):
                                 self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_PH1 + id*self.shared_memory_size] = rs485_3      #보드에 따라 ph 또는 다른 센서 값
                                 rs485_4 = (np.int32)(message.data[24] << 8 | message.data[25])
                                 self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_CO2 + id*self.shared_memory_size] = rs485_4      #보드에 따라 Co2 또는 다른 센서 값
+
+                                ext_temp = (np.int32)(message.data[32] << 8 | message.data[33])
+                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_EXT_TEMP + id*self.shared_memory_size] = ext_temp      #외부 온도 값
+                                ext_humi = (np.int32)(message.data[34] << 8 | message.data[35])
+                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_EXT_HUMI + id*self.shared_memory_size] = ext_humi      #외부 습도 값
+
                                 # rs232_1 = (np.float32)(message.data[25] << 8 | message.data[26]) * 0.001
                                 # self.shared_memory_u[0x27 + id*self.shared_memory_size] = (np.int32)(rs232_1)      #보드에 따라 Flower 또는 다른 센서 값
                             elif int(self.config['TANK_TYPE']) == 3: #숙성
@@ -342,7 +348,9 @@ class UnitBoardCanFdReceive(threading.Thread):
                             self.logging.warning(f'id: {id} unit board SET_GPIO_EX_COMMAND is wrong response')
                     elif message.data[0] == ConstDefine.PING_UNIT_BOARD_COMMAND:
                         if message.data[1] == 1:            # 1 : 정상, 0 : 오류
-                            self.logging.info(f'id: {id} Received message: PING_UNIT_BOARD_COMMAND')                                 
+                            pass
+                            # 너무 많은 로그를 생성하므로 여기서는 주석 처리함
+                            # self.logging.info(f'id: {id} Received message: PING_UNIT_BOARD_COMMAND')                                 
                         else:
                             self.logging.warning(f'id: {id} unit board PING_UNIT_BOARD_COMMAND is wrong response')
                     # LED를 
@@ -914,7 +922,7 @@ class UnitBoard:
                 global command
                 command = command_queue.get()
                 
-                if  command['CMD'] != 'GET_STATUS' and command['CMD'] != 'PING' and command['CMD'] != 'LED_STATUS':         # GET_STATUS는 계속 호출 되므로 log에 출력 하지 않음.
+                if  command['CMD'] != 'GET_STATUS' and command['CMD'] != 'PING' and command['CMD'] != 'LED_STATUS' and command['CMD'] != 'PING_UNIT_BOARD':         # GET_STATUS는 계속 호출 되므로 log에 출력 하지 않음.
                     if command['CMD'] == 'REF':
                         logging.info(f"{command['CMD']} command is inserted to {id} Unit Board")
                     elif command['CMD'] == 'STATE':
@@ -1432,12 +1440,12 @@ class UnitBoard:
                 # 2초마다 유닛보드 펌웨어 버전(GET_VERSION)을 요청한다.
                 # command_queue.get()으로 블로킹되는 루프 특성상, 명령이 들어와 루프가 돌 때
                 # 경과 시간을 확인하여 2초가 지났으면 GET_VERSION 명령을 큐에 넣는다.
-                if time.time() - last_version_poll >= 2:
-                    last_version_poll = time.time()
-                    message = {"UNIT_ID": id,
-                               "CMD": "PING_UNIT_BOARD",
-                               "SEND": False}
-                    command_queue.put(message, block=False)
+                # if time.time() - last_version_poll >= (int(self.config['ADDRESS']) * 0.15 + 1.5):  # id에 따라 0.1초 간격으로 분산
+                #     last_version_poll = time.time()
+                #     message = {"UNIT_ID": id,
+                #                "CMD": "PING_UNIT_BOARD",
+                #                "SEND": False}
+                #    command_queue.put(message, block=False)
             except Exception as e:
                 print(e)
                 i2cbus.close()

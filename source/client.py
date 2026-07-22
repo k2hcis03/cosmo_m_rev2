@@ -151,8 +151,11 @@ class UnitBoardGetStatus(threading.Thread):
                           ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP6,
                           ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP7,
                           ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP8]           #온도 값이 저장되는 shared_memory 위치 
-            humi_index = [0x13, 
-                        0x15]                       #습도 값이 저장되는 shared_memory 위치
+            ext_temp_index = [ConstDefine.SHARED_MEMORY_OFFSET_EXT_TEMP, 
+                              ConstDefine.SHARED_MEMORY_OFFSET_EXT_TEMP,
+   ]           #외부 온도 값이 저장되는 shared_memory 위치 
+            humi_index = [ConstDefine.SHARED_MEMORY_OFFSET_EXT_HUMI, 
+                          ConstDefine.SHARED_MEMORY_OFFSET_EXT_HUMI]                          #습도 값이 저장되는 shared_memory 위치
             co2_index = [ConstDefine.SHARED_MEMORY_OFFSET_CO2, 
                          ConstDefine.SHARED_MEMORY_OFFSET_CO2]                        #Co2 값이 저장되는 shared_memory 위치
             ph_index = [ConstDefine.SHARED_MEMORY_OFFSET_PH1, 
@@ -213,17 +216,23 @@ class UnitBoardGetStatus(threading.Thread):
                                 self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1100+x_index}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
                                 x_index += 1
 
+                    for x in range(int(unit_config.get('EXT_TEMP_NUM', 0))):
+                        if x < len(ext_temp_index):
+                            mem_idx = base_index + ext_temp_index[x]
+                            if mem_idx < len(self.shared_memory):
+                                self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1110+x}","VALUE":f"{self.shared_memory[mem_idx]*0.1:0.2F}"}) # 외부 온도센서 값 실제 확인 필요. 
+                                                
                     for x in range(int(unit_config.get('HUMI_NUM', 0))):
                         if x < len(humi_index):
                             mem_idx = base_index + humi_index[x]
                             if mem_idx < len(self.shared_memory):
-                                self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1200+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
+                                self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1200+x}","VALUE":f"{self.shared_memory[mem_idx]:0.2F}"})  # 습도는 유닛보드에서 *1000을 안함(오버플로우)
                     
                     for x in range(int(unit_config.get('CO2_NUM', 0))):
                         if x < len(co2_index):
                             mem_idx = base_index + co2_index[x]
                             if mem_idx < len(self.shared_memory):
-                                self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1300+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
+                                self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1300+x}","VALUE":f"{self.shared_memory[mem_idx]:0.2F}"})   # Co2는 유닛보드에서 *1000을 안함(오버플로우)
                     
                     for x in range(int(unit_config.get('LOAD_CELL_NUM', 0))):
                         if x < len(loadcell_index):
