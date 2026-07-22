@@ -1,5 +1,6 @@
 #! /usr/bin/python3
 import os
+import subprocess
 import can
 import time
 import queue
@@ -40,10 +41,12 @@ class CanFDReceive(threading.Thread):
                 time.sleep(0.5)
             
                 # CAN 인터페이스 재설정
-                os.system("sudo ifconfig can0 down")
+                subprocess.run(["sudo", "ip", "link", "set", "can0", "down"])
                 time.sleep(0.2)
-                os.system("sudo ip link set can0 up type can bitrate 1000000 dbitrate 4000000 restart-ms 1000 berr-reporting on fd on")
-                os.system("sudo ifconfig can0 txqueuelen 65536")
+                subprocess.run(["sudo", "ip", "link", "set", "can0", "up", "type", "can",
+                                 "bitrate", "1000000", "dbitrate", "4000000",
+                                 "restart-ms", "1000", "berr-reporting", "on", "fd", "on"])
+                subprocess.run(["sudo", "ip", "link", "set", "can0", "txqueuelen", "65536"])
                 time.sleep(0.5)
             
                 # CAN 버스 재생성
@@ -304,10 +307,12 @@ class CanFDTransmitte(threading.Thread):
                 time.sleep(0.5)
             
                 # CAN 인터페이스 재설정
-                os.system("sudo ifconfig can0 down")
+                subprocess.run(["sudo", "ip", "link", "set", "can0", "down"])
                 time.sleep(0.2)
-                os.system("sudo ip link set can0 up type can bitrate 1000000 dbitrate 4000000 restart-ms 1000 berr-reporting on fd on")
-                os.system("sudo ifconfig can0 txqueuelen 65536")
+                subprocess.run(["sudo", "ip", "link", "set", "can0", "up", "type", "can",
+                                 "bitrate", "1000000", "dbitrate", "4000000",
+                                 "restart-ms", "1000", "berr-reporting", "on", "fd", "on"])
+                subprocess.run(["sudo", "ip", "link", "set", "can0", "txqueuelen", "65536"])
                 time.sleep(0.5)
             
                 # CAN 버스 재생성
