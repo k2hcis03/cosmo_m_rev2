@@ -244,6 +244,10 @@ class CosmoMain(threading.Thread):
             elif message['CMD'] == 'FIRMWARE_UPDATE':
                 matching = False
                 for x in range(MAXUNITBOARD):
+                    message_hold = {"TANK_ID" : 1,                  
+                                "CMD":"HOLD_TX"}
+                    self.dispatch_to_unit(1, message_hold)
+                    time.sleep(0.1)
                     config = self.common_config[f'unit_board{x}']
                     if self.find_tank_id_to_unit_id(message['TANK_ID'], config):
                         message['UNIT_ID'] = x
@@ -286,6 +290,10 @@ class CosmoMain(threading.Thread):
                         matching = True
                 if not matching:
                     logging.info(f"Wrong Unit board id{message['TANK_ID']}")
+            elif message['CMD'] == 'HOLD_TX':       # 브로드 캐스팅
+                message['UNIT_ID'] = 1              # 1은 변경되어도 됨
+                self.dispatch_to_unit(1, message)
+                matching = True
 def main():
     config_file = configparser.ConfigParser()  ## 클래스 객체 생성
     config_file.read('/home/pi/Projects/cosmo-m/config/config.ini')  ## 파일 읽기

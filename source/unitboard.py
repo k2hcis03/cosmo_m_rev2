@@ -353,6 +353,11 @@ class UnitBoardCanFdReceive(threading.Thread):
                             # self.logging.info(f'id: {id} Received message: PING_UNIT_BOARD_COMMAND')                                 
                         else:
                             self.logging.warning(f'id: {id} unit board PING_UNIT_BOARD_COMMAND is wrong response')
+                    elif message.data[0] == ConstDefine.HOLD_TX_COMMAND:
+                        if message.data[1] == 1:            # 1 : 정상, 0 : 오류
+                            pass                              
+                        else:
+                            self.logging.warning(f'id: {id} unit board HOLD_TX_COMMAND is wrong response')
                     # LED를 
                     message = {"UNIT_ID" : id,                  
                                 "CMD":"LED_STATUS"}
@@ -1368,7 +1373,7 @@ class UnitBoard:
                                     data.append((crc >> 8) & 0xFF)
                                     message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = False,
                                                 data=bytearray(data))
-                                    time.sleep(0.1)    # 유닛보드가 펌웨어 업데이트 명령어를 처리할 수 있도록 100ms 대기
+                                    time.sleep(0.05)    # 유닛보드가 펌웨어 업데이트 명령어를 처리할 수 있도록 50ms 대기
                                     offset += 56
                                     print(f'index: {index}', "\n")
                                     index += 1
@@ -1380,6 +1385,7 @@ class UnitBoard:
                                         self.transmit_can_message(message, logging, id) 
                                     time.sleep(0.002)                 # 아래 대기 시간은 유닛보드에 RS485가 없으면 지연이 생기기 때문에 안정적인 지연시간 필요
                                 self.transmit_can_message(message, logging, id) 
+                                print(f'firmware update completed for ID: {id}', "\n")
                             except Exception as e:
                                 logging.error(f'id: {id} 펌웨어 업데이트 중 오류 발생: {e}')
                     elif command['CMD'] == 'GET_VERSION':
@@ -1436,6 +1442,17 @@ class UnitBoard:
                             message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = False,
                                         data=bytearray(data))
                             self.transmit_can_message(message, logging, id) 
+                    elif command['CMD'] == 'HOLD_TX':
+                        if int(self.config['ADDRESS']) != 999:
+                            data = [ConstDefine.HOLD_TX_COMMAND]     
+                            data.append(int(self.common_config['HOLD_TX_TIME']))  # HOLD_TX_TIME은 초 단위로 전송          
+                            crc = self.crc16(data)
+                            data.append(crc & 0xFF)
+                            data.append((crc >> 8) & 0xFF)
+                            # 아래 명령어는 브로드 캐스팅으로 전송
+                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=0, bitrate_switch = False,
+                                        data=bytearray(data))
+                            self.transmit_can_message(message, logging, 0) 
                 #
                 # 2초마다 유닛보드 펌웨어 버전(GET_VERSION)을 요청한다.
                 # command_queue.get()으로 블로킹되는 루프 특성상, 명령이 들어와 루프가 돌 때
