@@ -44,8 +44,9 @@ class CanFDReceive(threading.Thread):
                 subprocess.run(["sudo", "ip", "link", "set", "can0", "down"])
                 time.sleep(0.2)
                 subprocess.run(["sudo", "ip", "link", "set", "can0", "up", "type", "can",
-                                 "bitrate", "1000000", "dbitrate", "4000000",
-                                 "restart-ms", "1000", "berr-reporting", "on", "fd", "on"])
+                                "bitrate", "1000000", "sample-point", "0.75",
+                                "dbitrate", "1000000", "dsample-point", "0.75",
+                                "restart-ms", "1000", "fd", "on"])
                 subprocess.run(["sudo", "ip", "link", "set", "can0", "txqueuelen", "65536"])
                 time.sleep(0.5)
             
@@ -310,8 +311,9 @@ class CanFDTransmitte(threading.Thread):
                 subprocess.run(["sudo", "ip", "link", "set", "can0", "down"])
                 time.sleep(0.2)
                 subprocess.run(["sudo", "ip", "link", "set", "can0", "up", "type", "can",
-                                 "bitrate", "1000000", "dbitrate", "4000000",
-                                 "restart-ms", "1000", "berr-reporting", "on", "fd", "on"])
+                                "bitrate", "1000000", "sample-point", "0.75",
+                                "dbitrate", "1000000", "dsample-point", "0.75",
+                                "restart-ms", "1000", "fd", "on"])
                 subprocess.run(["sudo", "ip", "link", "set", "can0", "txqueuelen", "65536"])
                 time.sleep(0.5)
             
