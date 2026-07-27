@@ -307,8 +307,8 @@ class UnitBoardGetStatus(threading.Thread):
                             self.send_data['ERROR'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","CODE":f"{self.shared_memory[mem_idx]}"})
                             self.canfd_communication_error_cnt[i] = 0
                     # State 정보 추가
-                    status_idx = base_index + 0x18
-                    index_idx = base_index + 0x17
+                    status_idx = base_index + ConstDefine.SHARED_MEMORY_OFFSET_STATE    
+                    index_idx = base_index + ConstDefine.SHARED_MEMORY_OFFSET_INDEX
                     
                     if status_idx < len(self.shared_memory) and index_idx < len(self.shared_memory):
                         stage = self.shared_memory[status_idx] >> 16
@@ -318,7 +318,7 @@ class UnitBoardGetStatus(threading.Thread):
                         status = status_map.get(status_code, "NotDefine")
                         
                         index_number = self.shared_memory[index_idx]
-                        self.shared_memory[index_idx] = self.shared_memory[index_idx] + 1
+                        # self.shared_memory[index_idx] = self.shared_memory[index_idx] + 1
                         self.send_data['STATE'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","STAGE":f"{stage}","STATUS":status, "INDEX":f"{index_number}"})
                         
                 except KeyError as e:

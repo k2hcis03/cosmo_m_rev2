@@ -21,6 +21,7 @@ import configparser
 import unitboard
 from unitboard import UnitBoard as unit_board
 from client import TcpClientThread as tcp_client
+import subprocess
 
 shared_object = Manager().list()            # 프로세스간 공유 소켓 정보
 shared_object.insert(0, None)
@@ -33,11 +34,13 @@ class CosmoMain(threading.Thread):
         global GPIOADDR, MAXUNITBOARD
         
         threading.Thread.__init__(self) 
-        os.system("sudo ifconfig can0 down")
-        time.sleep(0.1)
-        # os.system("sudo ip link set can0 up type can bitrate 1000000 dbitrate 8000000 restart-ms 1000 berr-reporting on fd on sample-point .8 dsample-point .8")
-        os.system("sudo ip link set can0 up type can bitrate 1000000 dbitrate 4000000 restart-ms 1000 berr-reporting on fd on")
-        os.system("sudo ifconfig can0 txqueuelen 65536")
+        subprocess.run(["sudo", "ip", "link", "set", "can0", "down"])
+        time.sleep(0.2)
+        subprocess.run(["sudo", "ip", "link", "set", "can0", "up", "type", "can",
+                        "bitrate", "1000000", "sample-point", "0.75",
+                        "dbitrate", "1000000", "dsample-point", "0.75",
+                        "restart-ms", "1000", "fd", "on"])
+        subprocess.run(["sudo", "ip", "link", "set", "can0", "txqueuelen", "65536"])
         
         self.client = None
         self.tcp_queue = tcp_queue
@@ -242,12 +245,13 @@ class CosmoMain(threading.Thread):
                 if not matching:
                     logging.info(f"Wrong Unit board id{message['TANK_ID']}")
             elif message['CMD'] == 'FIRMWARE_UPDATE':
-                matching = False
-                for x in range(MAXUNITBOARD):
-                    message_hold = {"TANK_ID" : 1,                  
-                                "CMD":"HOLD_TX"}
-                    self.dispatch_to_unit(1, message_hold)
+                for x in range(MAXUNITBOARD):       # 모든 유닛보드에 HOLD_TX 명령을 보내서 CAN 버스 충돌 방지
+                    message = {"TANK_ID" : x+1,                  
+                                "CMD":"HOLD_TX",
+                                "UPDATE":"True"}
+                    self.dispatch_to_unit(x+1, message)
                     time.sleep(0.1)
+                for x in range(MAXUNITBOARD):
                     config = self.common_config[f'unit_board{x}']
                     if self.find_tank_id_to_unit_id(message['TANK_ID'], config):
                         message['UNIT_ID'] = x
@@ -316,7 +320,7 @@ def main():
     i2c_semaphor = manager.Semaphore(1) 
     
     can_fd_transmitte = canfd.CanFDTransmitte(logging, main_func)
-    can_fd_transmitte.queue = manager.Queue(1024)
+    can_fd_transmitte.queue = manager.Queue(4096)
     can_fd_transmitte.start()
     socket_send_queue = manager.Queue(524288)
     status_control_queue = manager.Queue(1024)

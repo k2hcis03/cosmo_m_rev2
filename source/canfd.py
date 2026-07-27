@@ -44,8 +44,9 @@ class CanFDReceive(threading.Thread):
                 subprocess.run(["sudo", "ip", "link", "set", "can0", "down"])
                 time.sleep(0.2)
                 subprocess.run(["sudo", "ip", "link", "set", "can0", "up", "type", "can",
-                                 "bitrate", "1000000", "dbitrate", "4000000",
-                                 "restart-ms", "1000", "berr-reporting", "on", "fd", "on"])
+                                "bitrate", "1000000", "sample-point", "0.75",
+                                "dbitrate", "1000000", "dsample-point", "0.75",
+                                "restart-ms", "1000", "fd", "on"])
                 subprocess.run(["sudo", "ip", "link", "set", "can0", "txqueuelen", "65536"])
                 time.sleep(0.5)
             
@@ -310,8 +311,9 @@ class CanFDTransmitte(threading.Thread):
                 subprocess.run(["sudo", "ip", "link", "set", "can0", "down"])
                 time.sleep(0.2)
                 subprocess.run(["sudo", "ip", "link", "set", "can0", "up", "type", "can",
-                                 "bitrate", "1000000", "dbitrate", "4000000",
-                                 "restart-ms", "1000", "berr-reporting", "on", "fd", "on"])
+                                "bitrate", "1000000", "sample-point", "0.75",
+                                "dbitrate", "1000000", "dsample-point", "0.75",
+                                "restart-ms", "1000", "fd", "on"])
                 subprocess.run(["sudo", "ip", "link", "set", "can0", "txqueuelen", "65536"])
                 time.sleep(0.5)
             
@@ -388,31 +390,35 @@ class CanFDTransmitte(threading.Thread):
                 
                 while retry_count <= self.max_retries and not sent_successfully:
                     try:
-                        self.main_func.can0.send(message)
+                        # can_lock으로 감싸 재초기화(shutdown 중 fd=-1) 도중의 송신을 방지
+                        with self.main_func.can_lock:
+                            self.main_func.can0.send(message)
                         sent_successfully = True
                         # 성공 시 에러 카운터 리셋
                         self.consecutive_errors = 0
-                        
+
                     except can.CanError as e:
                         retry_count += 1
                         self.logging.error(f'CAN error during send (attempt {retry_count}/{self.max_retries}): {e}')
-                        
+
                         if retry_count <= self.max_retries:
                             time.sleep(0.05 * retry_count)  # 점진적 백오프
                         else:
                             self.consecutive_errors += 1
                             self.total_errors += 1
                             self.logging.error(f'Failed to send message after {self.max_retries} retries')
-                    
-                    except OSError as e:
-                        # TX overflow 또는 네트워크 에러
+
+                    except (OSError, ValueError) as e:
+                        # TX overflow, 네트워크 에러 또는 재초기화 도중의 fd=-1 에러
                         retry_count += 1
-                        
+
                         if 'No buffer space available' in str(e) or 'errno 105' in str(e):
                             self.logging.error(f'TX buffer overflow (attempt {retry_count}/{self.max_retries})')
+                        elif 'file descriptor cannot be a negative integer' in str(e):
+                            self.logging.warning(f'CAN bus was mid-reinitialization during send (attempt {retry_count}/{self.max_retries})')
                         else:
                             self.logging.error(f'OSError during send (attempt {retry_count}/{self.max_retries}): {e}')
-                        
+
                         if retry_count <= self.max_retries:
                             time.sleep(0.1 * retry_count)  # 버퍼 비워질 시간 대기
                         else:
@@ -428,7 +434,8 @@ class CanFDTransmitte(threading.Thread):
                         if not sent_successfully:
                             # 버스가 방금 복구됐으므로 메시지 유실을 막기 위해 한 번 더 시도
                             try:
-                                self.main_func.can0.send(message)
+                                with self.main_func.can_lock:
+                                    self.main_func.can0.send(message)
                                 sent_successfully = True
                                 self.consecutive_errors = 0
                             except Exception as e:
@@ -462,7 +469,8 @@ class CanFDTransmitte(threading.Thread):
                 # 메시지를 재시도 없이 버리지 않도록 마지막으로 한 번 더 전송을 시도
                 if message is not None:
                     try:
-                        self.main_func.can0.send(message)
+                        with self.main_func.can_lock:
+                            self.main_func.can0.send(message)
                         self.consecutive_errors = 0
                     except Exception as e2:
                         self.logging.error(f'Message permanently dropped (arbitration_id=0x{message.arbitration_id:X}, data={bytes(message.data).hex()}): {e2}')

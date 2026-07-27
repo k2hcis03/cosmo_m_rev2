@@ -300,6 +300,9 @@ class UnitBoardCanFdReceive(threading.Thread):
                             self.socket_send_queue.put(ack_msg, block=False)
                             self.logging.warning(f'id: {id} unit board GET_VERSION_COMMAND is wrong response') 
                     elif message.data[0] == ConstDefine.FIRMWARE_UPDATE_COMMAND:
+                        if self.unit_board_instance and self.unit_board_instance.firmware_update_watchdog:
+                            self.unit_board_instance.firmware_update_watchdog.cancel()
+                            self.unit_board_instance.firmware_update_watchdog = None
                         if message.data[1] == 1:            # 1 : 정상, 0 : 오류
                             self.logging.info(f'id: {id} Received message: FIRMWARE_UPDATE_COMMAND')
                             if self.socket_send_queue:
@@ -318,7 +321,14 @@ class UnitBoardCanFdReceive(threading.Thread):
                         else:
                             self.socket_send_queue.put(bytes(json.dumps({"id" : f'{id}', "status":"fail!"}), 'UTF-8'), block=False)
                             self.logging.warning(f'id: {id} Firmware update fail!')
-                            self.logging.warning(f'id: {id} unit board FIRMWARE_UPDATE_COMMAND is wrong response') 
+                            self.logging.warning(f'id: {id} unit board FIRMWARE_UPDATE_COMMAND is wrong response')
+                            if self.status_control_queue:
+                                try:
+                                    self.status_control_queue.put({"cmd": "RESUME_TIMER", "unit_id": id}, timeout=1)
+                                except queue.Full:
+                                    self.logging.error(f'id: {id} status timer resume 큐가 가득 찼습니다.')
+                                except Exception as e:
+                                    self.logging.error(f'id: {id} status timer resume 요청 실패: {e}')
                     elif message.data[0] == ConstDefine.BOOT_UNIT_BOARD_COMMAND:
                         if message.data[1] == 1:            # 1 : 정상, 0 : 오류
                             self.logging.info(f'id: {id} Received message: BOOT_UNIT_BOARD_COMMAND')
@@ -492,8 +502,8 @@ class UnitBoardTempControl(threading.Thread):
     def pid_task(self):   # ref온도가 현재 온도보다 높으면 아래기능 수행 
         if self.pid_timer_call_time > 0 and self.temp_control_start:            
             if self.cold_valve_on_time:
-                self.cold_valve_on_time -= 1
                 if self.cold_valve_status == 0:
+                    self.cold_valve_on_time -= 1
                     self.set_cold_valve(ON)
             else:
                 if self.cold_valve_status == 1:
@@ -507,8 +517,8 @@ class UnitBoardTempControl(threading.Thread):
     def timer_task(self):    # ref온도가 현재 온도보다 높으면 아래기능 수행
         if self.pid_timer_call_time > 0 and self.temp_control_start:            
             if self.cold_valve_on_time > 0 and self.cold_valve_control_timer:        # self.time_to_on시간 동안 valve를 ON 시킴 모터 속도가 100이하 또는 cold valve가 0일 때만 모터 명령어 전송
-                self.cold_valve_on_time -= 1
                 if self.cold_valve_status == 0:
+                    self.cold_valve_on_time -= 1
                     self.set_cold_valve(ON)
                     # 온도 제어할 때, 모터가 100rpm보다 느린상태라면 구동 시킴
                     ref_rpm = int(self.config["TEMP_CONTROL_MOTOR_RPM"])
@@ -546,8 +556,10 @@ class UnitBoardTempControl(threading.Thread):
                     # ref.json 파일이 존재하면 기존 reference 데이터를 사용하고 없으면 새로운 reference 데이터를 사용합니다.
                     self.ref_file_name = self.dir_name+'/ref.json'
                     if os.path.exists(self.ref_file_name) and int(self.common_config['REF_RESTART']) == 1:
+                        time.sleep(2)
                         self.logging.info(f"id: {self.id} : {self.ref_file_name} file is exist 기존 refernce로 진행합니다.")
                         self.ref_continue = True
+                        time.sleep(5)               # board initialize완료 시간 대기. 프로그램이 재부팅 되면 unit_board_initialize()호출 됨
                         try:
                             with open(self.ref_file_name, 'r', encoding='utf-8') as f:
                                 self.ref_datas = json.load(f)
@@ -569,6 +581,9 @@ class UnitBoardTempControl(threading.Thread):
                         self.ref_continue = False
                     
                     self.ref_file_index = self.dir_name+'/ref.index'
+                    self.ref_file_stage = self.dir_name+'/ref.stage'
+                    self.ref_file_status = self.dir_name+'/ref.status'
+
                     if self.ref_continue:           #event 기다림 없이 그냥 진행
                         try:
                             with open(self.ref_file_index, 'r', encoding='utf-8') as f:
@@ -577,6 +592,27 @@ class UnitBoardTempControl(threading.Thread):
                         except Exception as e:
                             self.ref_index = self.ref_total  #ref.index 파일이 없으면 for문 동작 시키지 않음
                             self.logging.error(f"id: {id} : ref.index 파일 읽기 중 오류 발생: {e}")
+
+                        try:
+                            with open(self.ref_file_stage, 'r', encoding='utf-8') as f:
+                                self.ref_stage = int(f.read())
+                                temp = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_STATE + self.id*self.shared_memory_size] & 0x0000FFFF
+                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_STATE + self.id*self.shared_memory_size] = self.ref_stage << 16 | temp
+                            self.logging.info(f"id: {id} : ref.stage 파일을 읽어왔습니다. {self.ref_stage}")
+                        except Exception as e:
+                            self.ref_stage = 0  #ref.stage 파일이 없으면 0으로 설정
+                            self.logging.error(f"id: {id} : ref.stage 파일 읽기 중 오류 발생: {e}")
+
+                        try:
+                            with open(self.ref_file_status, 'r', encoding='utf-8') as f:
+                                self.ref_status = int(f.read())
+                                temp = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_STATE + self.id*self.shared_memory_size] & -65536  # 0xFFFF0000의 int32 2의 보수 표현 (numpy 2.x는 이 범위를 넘는 python int 리터럴을 int32 배열에 직접 연산하면 OverflowError 발생)
+                                self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_STATE + self.id*self.shared_memory_size] = temp | self.ref_status
+                                
+                            self.logging.info(f"id: {id} : ref.status 파일을 읽어왔습니다. {self.ref_status}")
+                        except Exception as e:
+                            self.ref_status = "None"  #ref.status 파일이 없으면 None으로 설정
+                            self.logging.error(f"id: {id} : ref.status 파일 읽기 중 오류 발생: {e}")
                     else:
                         self.ref_index = 0
                         self.event.wait()
@@ -597,9 +633,9 @@ class UnitBoardTempControl(threading.Thread):
                                         self.writer_csv = open(f'{self.dir_data_name}/pid_process{self.id}_{self.file_index}.csv', 'a', encoding='utf-8', newline='')
                                         self.writer = csv.writer(self.writer_csv, delimiter=',')
                                 except Exception as e:
-                                    self.logging.error(f"id: {self.id} : csv.txt 파일 읽기 중 오류 발생: {e}")   
-                                    self.dir_data_name = f'/home/pi/Projects/cosmo-m/data/pid_process{self.id}_{self.file_index}.csv'  
-                                                                    
+                                    self.logging.error(f"id: {self.id} : csv.txt 파일 읽기 중 오류 발생: {e}")
+                                    self.dir_data_name = f"/home/pi/Projects/cosmo-m/data/{datetime.datetime.now().strftime('%y%m%d_%H%M%S')}"
+
                                     if not os.path.isdir(self.dir_data_name):
                                         os.makedirs(self.dir_data_name, exist_ok=True)
                                     self.writer_csv = open(f'{self.dir_data_name}/pid_process{self.id}_{self.file_index}.csv', 'w', encoding='utf-8', newline='')
@@ -618,14 +654,14 @@ class UnitBoardTempControl(threading.Thread):
                                 self.writer.writerow(['time'] + ['ref.temp'] + ['current temp'] + ['valve on time'] + ['relay1_water'] + ['relay2_cold'] + 
                                                     ['relay3_res1'] + ['relay4_res2'] + ['rpm'] + ['analog1_up'] + ['analog3_res1'] + ['analog4_res2'] + 
                                                     ['analog5_res3'] +['analog6_res4'] + ['analog7_res5'] + ['analog8_res6'])   
-                                
+
+                                # csv.txt는 온도 제어 시퀀스가 재시작될 때, 로그를 이어 쓸 CSV 디렉토리 경로를 기억해두는 용도
                                 if int(self.common_config['REF_RESTART']) == 1:
                                     try:
-                                        csv_file_name = f'{self.dir_data_name}/pid_process{self.id}_{self.file_index}.csv'
                                         with open(self.dir_name+'/csv.txt', 'w', encoding='utf-8') as f:
-                                            f.write(csv_file_name)
+                                            f.write(self.dir_data_name)
                                     except Exception as e:
-                                        self.logging.error(f"id: {self.id} : ref.index 파일 저장 중 오류 발생: {e}")
+                                        self.logging.error(f"id: {self.id} : csv.txt 파일 저장 중 오류 발생: {e}")
                             #real temp == analog2, 
                             self.file_write = False
                         except Exception as e:
@@ -635,11 +671,25 @@ class UnitBoardTempControl(threading.Thread):
                         # self.ref_file_index = self.dir_name      
                         self.logging.info(f"id: {self.id}: ref 파일을 순서대로 읽어옵니다. {x+1}")
                         print(f'id: {self.id} : ref 파일을 순서대로 읽어옵니다. {x+1 }')
+                        # 레시피 동작시 현재 인덱스 값
+                        self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_INDEX + self.id*self.shared_memory_size] = x+1
                         try:
                             with open(self.ref_file_index, 'w', encoding='utf-8') as f:
                                 f.write(str(x))
                         except Exception as e:
                             self.logging.error(f"id: {self.id} : ref.index 파일 저장 중 오류 발생: {e}")
+
+                        try:
+                            with open(self.ref_file_stage, 'w', encoding='utf-8') as f:
+                                f.write(str(self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_STATE + self.id*self.shared_memory_size] >> 16))
+                        except Exception as e:
+                            self.logging.error(f"id: {self.id} : ref.stage 파일 저장 중 오류 발생: {e}")
+
+                        try:
+                            with open(self.ref_file_status, 'w', encoding='utf-8') as f:
+                                f.write(str(self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_STATE + self.id*self.shared_memory_size] & 0xFFFF))
+                        except Exception as e:
+                            self.logging.error(f"id: {self.id} : ref.status 파일 저장 중 오류 발생: {e}")
 
                         if self.temp_control_start:
                             time_start = time.time()
@@ -781,6 +831,7 @@ class UnitBoard:
         # self.pid_update()
         self.dir_name = None                # data 기록 디렉토리 생성 ref data 저장 디렉토리
         self.motor_unit_board_gpo = 0
+        self.firmware_update_watchdog = None    # 펌웨어 업데이트 응답 무응답 대비 타이머
 
     def unit_board_initialize(self, id, logging):
         ######################################################################################################################################################
@@ -825,8 +876,20 @@ class UnitBoard:
         except ValueError as e:
             print(e)
         
-        self.transmit_can_message(message, logging, id) 
-        ######################################################################################################################################################                        
+        self.transmit_can_message(message, logging, id)
+        ######################################################################################################################################################
+    # 펌웨어 업데이트 완료/실패 응답이 HOLD_TX_TIME 이내에 오지 않을 경우, 상태 전송 타이머를 강제로 재개
+    def firmware_update_watchdog_timeout(self, id, logging):
+        logging.warning(f'id: {id} 펌웨어 업데이트 응답 시간(HOLD_TX_TIME={self.common_config["HOLD_TX_TIME"]}초) 초과. 상태 전송 타이머를 강제로 재개합니다.')
+        self.firmware_update_watchdog = None
+        if self.status_control_queue:
+            try:
+                self.status_control_queue.put({"cmd": "RESUME_TIMER", "unit_id": id}, timeout=1)
+            except queue.Full:
+                logging.error(f'id: {id} status timer resume(timeout) 큐가 가득 찼습니다.')
+            except Exception as e:
+                logging.error(f'id: {id} status timer resume(timeout) 요청 실패: {e}')
+
     # data 리스트에 있는 값들에 대해 CRC16 계산 후 data에 추가
     def crc16(self, data: list):
         crc = 0xFFFF
@@ -902,18 +965,21 @@ class UnitBoard:
             print(e)
             return  # config 파일 없이는 동작 불가능하므로 프로세스 종료
         shared_memory_u[id * self.shared_memory_size] = os.getpid()   # id는 shared memory에 첫 번째 데이터  
-        # 온도조절 관련 쓰레드 생성 ##################################################
-        temp_thread = UnitBoardTempControl(id, event, logging, self.can_fd_transmitte_queue, 
-                                                           command_queue, 
-                                                           shared_memory_u, unit_semaphor, self.config, self.shared_memory_size, self.dir_name, self.common_config)
-        temp_thread.start()
-        while not can_fd_receive_queue.empty():
-            can_fd_receive_queue.get()                  # as docs say: Remove and return an item from the queue.
-
+        
         can_fd_receive_thread = UnitBoardCanFdReceive(id, logging, can_fd_receive_queue, shared_memory_u, self.shared_memory_size, unit_semaphor, 
             self.config, self.socket_send_queue, self.status_control_queue, self, self.common_config, command_queue)
         can_fd_receive_thread.start()
         self.unit_board_initialize(id, logging)
+
+        time.sleep(3)
+        # 온도조절 관련 쓰레드 생성 ##################################################
+        temp_thread = UnitBoardTempControl(id, event, logging, self.can_fd_transmitte_queue, 
+                                                            command_queue, 
+                                                            shared_memory_u, unit_semaphor, self.config, self.shared_memory_size, self.dir_name, self.common_config)
+        temp_thread.start()
+        while not can_fd_receive_queue.empty():
+            can_fd_receive_queue.get()                  # as docs say: Remove and return an item from the queue.
+        
         # 물탱크 유닛보드이면 물탱크 무게 측정 쓰레드 생성
         # 탱크 종류 0 = 사용하지 않음, 1: 발효, 2: 제성, 3: 숙성, 4: 제품, 5: 냉각수, 6: 물, 7: 밑술, 8: 펌프, 9:기타
         if int(self.config['TANK_TYPE']) == 6:
@@ -1000,11 +1066,11 @@ class UnitBoard:
                             unit_semaphor.acquire()
                             if command['STATUS'] == 'None':
                                 temp_thread.temp_control_start = False
-                                shared_memory_u[0x18 + id*self.shared_memory_size] = int(command['STAGE']) << 16 | 0
+                                shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_STATE + id*self.shared_memory_size] = int(command['STAGE']) << 16 | 0
                                 status = 0
                             elif command['STATUS'] == 'Stop':
                                 temp_thread.temp_control_start = False
-                                shared_memory_u[0x18 + id*self.shared_memory_size] = int(command['STAGE']) << 16 | 0
+                                shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_STATE + id*self.shared_memory_size] = int(command['STAGE']) << 16 | 0
                                 status = 1
                             elif command['STATUS'] == 'Run':
                                 if not temp_thread.temp_control_start:      #기존 동작하지 않고 있으면 동작 함.
@@ -1021,7 +1087,7 @@ class UnitBoard:
                                     temp_thread.file_write_state = True
                                     temp_thread.file_index  += 1
                                     event.set()
-                                shared_memory_u[0x18 + id*self.shared_memory_size] = int(command['STAGE']) << 16 | 0
+                                shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_STATE + id*self.shared_memory_size] = int(command['STAGE']) << 16 | 0
                                 status = 2
                             elif command['STATUS'] == 'Pause':
                                 if temp_thread.temp_control_start:      #기존 온도 쓰레드가 끝나지 않으면 강제 종료
@@ -1039,26 +1105,26 @@ class UnitBoard:
                                     event.set()
                                 else:
                                     logging.error(f'id: {id} reference data is empty or pause')
-                                shared_memory_u[0x18 + id*self.shared_memory_size] = int(command['STAGE']) << 16 | 0
+                                shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_STATE + id*self.shared_memory_size] = int(command['STAGE']) << 16 | 0
                                 status = 3
                             elif command['STATUS'] == 'Initial':
                                 temp_thread.temp_control_start = False
                                 temp_thread.file_index = 0
                                 temp_thread.ref_datas.clear()
                                 temp_thread.dir_data_name = f"/home/pi/Projects/cosmo-m/data/{datetime.datetime.now().strftime('%y%m%d_%H%M%S')}"
-                                shared_memory_u[0x18 + id*self.shared_memory_size] = int(command['STAGE']) << 16 | 0
+                                shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_STATE + id*self.shared_memory_size] = int(command['STAGE']) << 16 | 0
                                 logging.info(f'id: {id} reference data status is  Initial')
                                 status = 4
                             elif command['STATUS'] == 'Error':
                                 temp_thread.temp_control_start = False
-                                shared_memory_u[0x18 + id*self.shared_memory_size] = int(command['STAGE']) << 16 | 0
+                                shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_STATE + id*self.shared_memory_size] = int(command['STAGE']) << 16 | 0
                                 status = 5
                             else:
                                 status = 10
-                            shared_memory_u[0x18 + id*self.shared_memory_size] = int(command['STAGE']) << 16 | status
+                            shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_STATE + id*self.shared_memory_size] = int(command['STAGE']) << 16 | status
                             
                             if command['STATUS'] == 'Run' and int(command['STAGE']) != old_stage:
-                                shared_memory_u[0x17 + id*self.shared_memory_size] = 0
+                                shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_INDEX + id*self.shared_memory_size] = 0
                             old_stage = int(command['STAGE'])
                             unit_semaphor.release()
                     elif command['CMD'] == 'GET_ADC':
@@ -1329,6 +1395,10 @@ class UnitBoard:
                             if self.status_control_queue:
                                 try:
                                     self.status_control_queue.put({"cmd": "PAUSE_TIMER", "unit_id": id}, timeout=1)
+                                    hold_tx_time = float(self.common_config['HOLD_TX_TIME'])
+                                    self.firmware_update_watchdog = Timer(hold_tx_time, self.firmware_update_watchdog_timeout, args=(id, logging))
+                                    self.firmware_update_watchdog.daemon = True
+                                    self.firmware_update_watchdog.start()
                                 except queue.Full:
                                     logging.error(f'id: {id} status timer pause 큐가 가득 찼습니다.')
                                 except Exception as e:
@@ -1373,7 +1443,7 @@ class UnitBoard:
                                     data.append((crc >> 8) & 0xFF)
                                     message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = False,
                                                 data=bytearray(data))
-                                    time.sleep(0.05)    # 유닛보드가 펌웨어 업데이트 명령어를 처리할 수 있도록 50ms 대기
+                                    time.sleep(0.09)    # 유닛보드가 펌웨어 업데이트 명령어를 처리할 수 있도록 50ms 대기
                                     offset += 56
                                     print(f'index: {index}', "\n")
                                     index += 1
@@ -1445,7 +1515,12 @@ class UnitBoard:
                     elif command['CMD'] == 'HOLD_TX':
                         if int(self.config['ADDRESS']) != 999:
                             data = [ConstDefine.HOLD_TX_COMMAND]     
-                            data.append(int(self.common_config['HOLD_TX_TIME']))  # HOLD_TX_TIME은 초 단위로 전송          
+
+                            if command['UPDATE'] == 'True':
+                                data.append(int(self.common_config['HOLD_TX_TIME']))  # HOLD_TX_TIME은 초 단위로 전송          
+                            else:
+                                time.sleep(2)
+                                data.append(0)  # HOLD_TX_TIME은 초 단위로 전송
                             crc = self.crc16(data)
                             data.append(crc & 0xFF)
                             data.append((crc >> 8) & 0xFF)
