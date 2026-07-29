@@ -1426,9 +1426,9 @@ class UnitBoard:
                                 index = 0
                                 error_retry = 0
                                 while offset < len(file_temp):
-                                    if error_retry >= 5:
-                                        logging.error(f'id: {id} 펌웨어 업데이트 중 오류가 5회 발생했습니다.')
-                                        print(f'펌웨어 업데이트 중 오류가 5회 발생했습니다', "\n")
+                                    if error_retry >= 3:
+                                        logging.error(f'id: {id} 펌웨어 업데이트 중 오류가 3회 발생했습니다.')
+                                        print(f'펌웨어 업데이트 중 오류가 3회 발생했습니다', "\n")
                                         break
                                     
                                     chunk = file_temp[offset:offset+56]
