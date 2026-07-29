@@ -100,6 +100,8 @@ class CanFDReceive(threading.Thread):
                 # main_func의 can0을 갱신 (송/수신 스레드가 항상 이를 통해 참조)
                 self.main_func.can0 = new_bus
                 self.main_func.can_last_reinit_time = time.time()
+                # 유닛보드 프로세스(펌웨어 업데이트 등)가 재초기화 발생 여부를 감지할 수 있도록 카운터 증가
+                self.main_func.bus_reinit_counter.value += 1
 
                 # 에러 카운터 리셋
                 self.consecutive_errors = 0
@@ -367,6 +369,8 @@ class CanFDTransmitte(threading.Thread):
                 # main_func의 can0을 갱신 (송/수신 스레드가 항상 이를 통해 참조)
                 self.main_func.can0 = new_bus
                 self.main_func.can_last_reinit_time = time.time()
+                # 유닛보드 프로세스(펌웨어 업데이트 등)가 재초기화 발생 여부를 감지할 수 있도록 카운터 증가
+                self.main_func.bus_reinit_counter.value += 1
 
                 # 에러 카운터 리셋
                 self.consecutive_errors = 0

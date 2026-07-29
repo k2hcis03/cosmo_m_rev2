@@ -47,6 +47,8 @@ class CosmoMain(threading.Thread):
         self.common_config = config_file
         common_config = self.common_config['common']
         MAXUNITBOARD = int(common_config['MAXUNITBOARD'])
+        self.max_unit_board = MAXUNITBOARD
+        
         GPIOADDR1 = int(common_config['GPIOADDR1'], 16)           #16 진수
         GPIOADDR2 = int(common_config['GPIOADDR2'], 16)           #16 진수
         
@@ -246,11 +248,12 @@ class CosmoMain(threading.Thread):
                     logging.info(f"Wrong Unit board id{message['TANK_ID']}")
             elif message['CMD'] == 'FIRMWARE_UPDATE':
                 for x in range(MAXUNITBOARD):       # 모든 유닛보드에 HOLD_TX 명령을 보내서 CAN 버스 충돌 방지
-                    message = {"TANK_ID" : x+1,                  
-                                "CMD":"HOLD_TX",
-                                "UPDATE":"True"}
-                    self.dispatch_to_unit(x+1, message)
-                    time.sleep(0.1)
+                    if x > 0:
+                        message_hold = {"TANK_ID" : x,                  
+                                    "CMD":"HOLD_TX",
+                                    "UPDATE":"True"}
+                        self.dispatch_to_unit(x, message_hold)
+                        time.sleep(0.05)
                 for x in range(MAXUNITBOARD):
                     config = self.common_config[f'unit_board{x}']
                     if self.find_tank_id_to_unit_id(message['TANK_ID'], config):
@@ -314,7 +317,10 @@ def main():
     # ip = common_config['HOST']
     # port = int(common_config['PORT2'])   
     manager = Manager()
-    
+    # CAN 버스 재초기화 발생 횟수. 유닛보드 프로세스(펌웨어 업데이트 등)가 프로세스 경계 너머로
+    # 재초기화 발생 여부를 감지할 수 있도록 공유 카운터로 둠.
+    main_func.bus_reinit_counter = manager.Value('i', 0)
+
     can_fd_receive = canfd.CanFDReceive(logging, main_func)
     can_fd_receive.start()
     i2c_semaphor = manager.Semaphore(1) 
@@ -354,11 +360,12 @@ def main():
             socket_event.clear()
             print("Server is Connected")
             with ProcessPoolExecutor(max_workers=32) as executor:
-                unit_func = unit_board(can_fd_transmitte.queue, socket_send_queue, GPIOADDR1, GPIOADDR2, i2c_semaphor, status_control_queue)
+                unit_func = unit_board(can_fd_transmitte.queue, socket_send_queue, GPIOADDR1, GPIOADDR2, i2c_semaphor, status_control_queue,
+                                      main_func.bus_reinit_counter)
                 
                 furtures = {executor.submit(unit_func.unit_process, i, shm.name, main_func.unit_np_shm,
                                             main_func.unit_semaphor, can_fd_receive.receive_queue[i],
-                                            main_func.command_queue[i], logging) : i for i in range(MAXUNITBOARD)}
+                                            main_func.command_queue, logging) : i for i in range(MAXUNITBOARD)}
                 for furture in as_completed(furtures):
                     print("All Process is done")
                 sys.exit(1)

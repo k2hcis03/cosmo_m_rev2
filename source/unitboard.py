@@ -821,13 +821,14 @@ class UnitBoardTempControl(threading.Thread):
                     print(f"id: {self.id} : {e}")
 
 class UnitBoard:
-    def __init__(self, transmitte_queue, socket_send_queue, GPIOADDR1, GPIOADDR2, i2c_semaphor, status_control_queue) -> None:
+    def __init__(self, transmitte_queue, socket_send_queue, GPIOADDR1, GPIOADDR2, i2c_semaphor, status_control_queue, bus_reinit_counter) -> None:
         self.can_fd_transmitte_queue = transmitte_queue
         self.socket_send_queue = socket_send_queue
         self.GPIOADDR1 = GPIOADDR1
         self.GPIOADDR2 = GPIOADDR2
         self.i2c_semaphor = i2c_semaphor
         self.status_control_queue = status_control_queue
+        self.bus_reinit_counter = bus_reinit_counter    # CAN 버스 재초기화 감지용 공유 카운터 (펌웨어 업데이트 재전송에 사용)
         # self.pid_update()
         self.dir_name = None                # data 기록 디렉토리 생성 ref data 저장 디렉토리
         self.motor_unit_board_gpo = 0
@@ -948,7 +949,7 @@ class UnitBoard:
         id = n
         unit_semaphor = semaphor
         can_fd_receive_queue = receive_queue
-        command_queue = cmd_queue
+        command_queue = cmd_queue[id]
         event = threading.Event()
         old_status = "None"
         old_stage = 1000
@@ -1404,9 +1405,7 @@ class UnitBoard:
                                 except Exception as e:
                                     logging.error(f'id: {id} status timer pause 요청 실패: {e}')
                             try:
-                                data = [ConstDefine.FIRMWARE_UPDATE_COMMAND]
                                 file_temp = []
-                                is_last = False
                                 with open(command['FILE'], 'rb') as f:
                                     while True:
                                         chunk = f.read(1024)
@@ -1425,16 +1424,22 @@ class UnitBoard:
 
                                 offset = 0
                                 index = 0
-                                chunk = None
+                                error_retry = 0
                                 while offset < len(file_temp):
+                                    if error_retry >= 5:
+                                        logging.error(f'id: {id} 펌웨어 업데이트 중 오류가 5회 발생했습니다.')
+                                        print(f'펌웨어 업데이트 중 오류가 5회 발생했습니다', "\n")
+                                        break
+                                    
                                     chunk = file_temp[offset:offset+56]
                                     if len(chunk) < 56 or offset + 56 >= len(file_temp):
                                         is_last = 1
                                     else:
                                         is_last = 0
-                                    
+
+                                    data = [ConstDefine.FIRMWARE_UPDATE_COMMAND]
                                     data.append((index >> 8) & 0xff)        # big endian
-                                    data.append(index & 0xff)     
+                                    data.append(index & 0xff)
                                     data.append(len(chunk))
                                     data.append(is_last)
                                     data = data + list(chunk)
@@ -1443,18 +1448,35 @@ class UnitBoard:
                                     data.append((crc >> 8) & 0xFF)
                                     message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = False,
                                                 data=bytearray(data))
-                                    time.sleep(0.09)    # 유닛보드가 펌웨어 업데이트 명령어를 처리할 수 있도록 50ms 대기
-                                    offset += 56
+
+                                    reinit_before = self.bus_reinit_counter.value
+                                    self.transmit_can_message(message, logging, id)
+                                    time.sleep(0.04)    # 유닛보드가 펌웨어 업데이트 명령어를 처리할 수 있도록 40ms 대기
+
+                                    if self.bus_reinit_counter.value != reinit_before:
+                                        # 전송 중 CAN 버스가 재초기화됨(BUS-OFF 등) -> 같은 index로 재전송, offset/index는 증가시키지 않음
+                                        logging.warning(f'id: {id} 펌웨어 업데이트 중 CAN 버스 재초기화 감지, index {index} 청크 재전송')
+                                        time.sleep(0.5)     # 버스가 안정될 시간을 둠
+                                        error_retry += 1
+                                        offset = 0
+                                        index = 0
+                                        continue
+
                                     print(f'index: {index}', "\n")
+                                    offset += 56
                                     index += 1
-                                    
+
                                     if is_last:
                                         break
-                                    else:
-                                        data = [ConstDefine.FIRMWARE_UPDATE_COMMAND]
-                                        self.transmit_can_message(message, logging, id) 
                                     time.sleep(0.002)                 # 아래 대기 시간은 유닛보드에 RS485가 없으면 지연이 생기기 때문에 안정적인 지연시간 필요
-                                self.transmit_can_message(message, logging, id) 
+
+                                for x in range(int(self.common_config['MAXUNITBOARD'])):       # 모든 유닛보드에 HOLD_TX 명령을 보내서 CAN 버스 충돌 방지
+                                    if x > 0:
+                                        message = {"TANK_ID" : x,                  
+                                                    "CMD":"HOLD_TX",
+                                                    "UPDATE":"False"}
+                                        cmd_queue[x].put(message, block=False)
+                                        time.sleep(0.05)
                                 print(f'firmware update completed for ID: {id}', "\n")
                             except Exception as e:
                                 logging.error(f'id: {id} 펌웨어 업데이트 중 오류 발생: {e}')
@@ -1525,9 +1547,9 @@ class UnitBoard:
                             data.append(crc & 0xFF)
                             data.append((crc >> 8) & 0xFF)
                             # 아래 명령어는 브로드 캐스팅으로 전송
-                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=0, bitrate_switch = False,
+                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = False,
                                         data=bytearray(data))
-                            self.transmit_can_message(message, logging, 0) 
+                            self.transmit_can_message(message, logging, id) 
                 #
                 # 2초마다 유닛보드 펌웨어 버전(GET_VERSION)을 요청한다.
                 # command_queue.get()으로 블로킹되는 루프 특성상, 명령이 들어와 루프가 돌 때
