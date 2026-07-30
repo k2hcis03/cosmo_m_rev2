@@ -21,6 +21,7 @@ import configparser
 import unitboard
 from unitboard import UnitBoard as unit_board
 from client import TcpClientThread as tcp_client
+from constdefine import ConstDefine
 import subprocess
 
 shared_object = Manager().list()            # 프로세스간 공유 소켓 정보
@@ -300,8 +301,27 @@ class CosmoMain(threading.Thread):
                 matching = True
 def main():
     config_file = configparser.ConfigParser()  ## 클래스 객체 생성
-    config_file.read('/home/pi/Projects/cosmo-m/config/config.ini')  ## 파일 읽기
-    common_config = config_file['common']
+    # config.ini 없이는 동작이 불가능하므로, 실패 원인을 사용자에게 명확히 알리고 종료한다.
+    # ConfigParser.read()는 파일이 없어도 예외를 던지지 않고 빈 리스트를 반환하므로 반환값을 직접 확인해야 한다.
+    try:
+        loaded_files = config_file.read(ConstDefine.CONFIG_PATH)  ## 파일 읽기
+        if not loaded_files:
+            raise FileNotFoundError(f'파일이 존재하지 않거나 읽을 수 없습니다')
+        common_config = config_file['common']
+    except KeyError as e:
+        error_message = (f'설정 파일에 [common] 섹션이 없습니다.\n'
+                         f'  경로: {ConstDefine.CONFIG_PATH}\n'
+                         f'  누락된 항목: {e}')
+        logging.critical(f'config.ini 오류로 프로그램을 종료합니다 - {error_message}')
+        print(f'\n[치명적 오류] {error_message}\n', file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        error_message = (f'설정 파일을 읽을 수 없습니다.\n'
+                         f'  경로: {ConstDefine.CONFIG_PATH}\n'
+                         f'  원인: {e}')
+        logging.critical(f'config.ini 오류로 프로그램을 종료합니다 - {error_message}')
+        print(f'\n[치명적 오류] {error_message}\n', file=sys.stderr)
+        sys.exit(1)
 
     tcp_queue = queue.Queue(maxsize=8192)
     main_func = CosmoMain(tcp_queue, config_file)

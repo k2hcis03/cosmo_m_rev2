@@ -3,6 +3,7 @@
 import socket
 import json
 import time
+import random
 import threading
 import smbus
 import numpy as np
@@ -17,6 +18,60 @@ import configparser
 from signal import signal, SIGPIPE, SIG_DFL
 from constdefine import ConstDefine
 # signal(SIGPIPE,SIG_DFL)
+
+######################################################################################################
+# 소켓 재연결 / 연결 상태 감시 상수
+######################################################################################################
+INITIAL_RECONNECT_DELAY = 1         # 최초 재연결 대기 시간(초)
+MAX_RECONNECT_DELAY = 15            # 최대 재연결 대기 시간(초). 관리 PC 명령 수신 공백을 15초로 제한
+STABLE_CONNECTION_SECONDS = 30      # 이 시간 이상 유지된 연결만 정상으로 보고 백오프를 초기화
+RECONNECT_JITTER_RATIO = 0.2        # 재연결 대기 시간에 적용할 지터 비율(±20%)
+
+SERVER_PING_INTERVAL = 1.0          # 서버가 PING을 보내는 주기(초)
+RECEIVE_POLL_TIMEOUT = 2.0          # 수신 소켓 recv 타임아웃(초). 무수신 판정을 위한 폴링 주기
+RECEIVE_IDLE_TIMEOUT = 5.0          # 이 시간 동안 아무것도 수신되지 않으면 죽은 연결로 판단(PING 주기의 5배)
+
+TCP_KEEPALIVE_IDLE = 5              # keepalive 프로브를 시작하기까지의 유휴 시간(초)
+TCP_KEEPALIVE_INTERVAL = 2          # keepalive 프로브 간격(초)
+TCP_KEEPALIVE_COUNT = 3             # 응답 없는 프로브 허용 횟수. 위 값과 합쳐 약 11초 내에 사망 감지
+
+
+def configure_tcp_socket(sock, logging=None):
+    """TCP 소켓에 keepalive와 NODELAY를 설정한다.
+
+    keepalive가 없으면 상대가 FIN 없이 사라진 half-open 연결을 감지할 방법이 없다.
+    리눅스 기본 keepalive 유휴 시간은 7200초이므로 SO_KEEPALIVE만 켜는 것은 의미가 없고,
+    TCP_KEEPIDLE/INTVL/CNT까지 함께 지정해야 한다.
+    """
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+        for option_name, value in (('TCP_KEEPIDLE', TCP_KEEPALIVE_IDLE),
+                                   ('TCP_KEEPINTVL', TCP_KEEPALIVE_INTERVAL),
+                                   ('TCP_KEEPCNT', TCP_KEEPALIVE_COUNT)):
+            option = getattr(socket, option_name, None)     # 플랫폼에 없을 수 있으므로 확인 후 적용
+            if option is not None:
+                sock.setsockopt(socket.IPPROTO_TCP, option, value)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+    except OSError as e:
+        if logging:
+            logging.warning(f'TCP keepalive 설정 실패(무시하고 진행): {e}')
+
+
+def next_reconnect_delay(current_delay, session_duration):
+    """직전 연결이 유지된 시간을 근거로 다음 재연결 대기 시간을 계산한다.
+
+    '연결 성공'이 아니라 '충분히 오래 유지된 연결'만 백오프를 초기화한다.
+    accept 직후 바로 끊는 서버를 상대로 1초 간격 재연결이 무한 반복되는 것을 막기 위함이다.
+    """
+    if session_duration >= STABLE_CONNECTION_SECONDS:
+        return INITIAL_RECONNECT_DELAY
+    return min(current_delay * 2, MAX_RECONNECT_DELAY)
+
+
+def apply_jitter(delay):
+    """송신/수신 소켓이 같은 순간에 몰려 재연결하지 않도록 대기 시간에 지터를 준다."""
+    spread = delay * RECONNECT_JITTER_RATIO
+    return max(0.1, delay + random.uniform(-spread, spread))
 
 class UnitBoardGetStatus(threading.Thread):
     def __init__(self, logging, tcp_queue, max_unit_board, shared_memory, socket_send_queue, receive_event, status_control_queue):
@@ -45,7 +100,7 @@ class UnitBoardGetStatus(threading.Thread):
         self.config_file = configparser.ConfigParser()
         self.canfd_communication_error_cnt = [0 for _ in range(self.max_unit_board)]
         try:
-            config_result = self.config_file.read('/home/pi/Projects/cosmo-m/config/config.ini')
+            config_result = self.config_file.read(ConstDefine.CONFIG_PATH)
             if not config_result:
                 logging.error('Config file not found, using default values')
                 # 기본값 설정
@@ -406,22 +461,24 @@ class UnitBoardGetStatus(threading.Thread):
             Timer(1, self.timer_update_task).start()
             self.logging.info('Timer started for status updates')
             
-            reconnect_delay = 1  # 초기 재연결 대기 시간
-            max_reconnect_delay = 60
-            
+            reconnect_delay = INITIAL_RECONNECT_DELAY  # 초기 재연결 대기 시간
+            connected_at = None                        # 연결이 수립된 시각(monotonic)
+
             while True:
                 client = None
-                try: 
+                try:
                     self.logging.info(f'Attempting to connect to transmit server {ip}:{port}')
                     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     client.settimeout(timeout_seconds)
                     client.connect(SERVER_ADDR)
+                    # 송신 소켓은 읽지 않으므로, 상대가 조용히 사라진 경우 keepalive만이 감지 수단이다
+                    configure_tcp_socket(client, self.logging)
+                    connected_at = time.monotonic()
                     self.logging.info(f'송신 서버에 연결 되었습니다. {ip}:{port}')
-                    
+
                     self.client = client
-                    reconnect_delay = 1  # 연결 성공 시 재연결 대기 시간 리셋
                     self.consecutive_errors = 0
-                    
+
                     while True:
                         ######################################################################################################  
                         # 2023-06-19-@K2H 
@@ -472,16 +529,11 @@ class UnitBoardGetStatus(threading.Thread):
                 except socket.error as e:
                     self.logging.error(f"Transmitter socket error: {e}")
                     self.consecutive_errors += 1
-                    
-                    # 재연결 전 GET_STATUS 명령 전송
-                    for x in range(self.max_unit_board):
-                        try:
-                            data = {"UNIT_ID": x, "CMD": "GET_STATUS", "SEND": False}
-                            self.tcp_queue.put(data, block=False)
-                            time.sleep(0.1)
-                        except Exception as e:
-                            self.logging.error(f'Error sending GET_STATUS during reconnect: {e}')
-                    
+                    # 2026-07-30-@K2H 재연결 전 GET_STATUS 일괄 전송 로직 제거.
+                    # CAN FD 멀티 마스터 전환으로 유닛보드가 스스로 상태를 전송하므로 불필요하며,
+                    # sleep(0.1) x MAXUNITBOARD 만큼(19대 기준 1.9초) 재연결이 지연되고
+                    # 끊길 때마다 CAN 큐에 불필요한 프레임이 쌓이는 부작용만 있었다.
+
                 except RemoteError as e:
                     self.logging.critical(f"Multiprocessing Manager RemoteError: {e}")
                     self.logging.critical("Program requires restart due to broken IPC.")
@@ -500,17 +552,18 @@ class UnitBoardGetStatus(threading.Thread):
                             self.logging.info('Transmitter socket closed')
                     except Exception as e:
                         self.logging.error(f'Error closing transmitter socket: {e}')
-                    
+
                     self.client = None
-                    
-                    # 재연결 대기 (exponential backoff)
-                    if self.consecutive_errors > self.max_error_threshold:
-                        self.logging.warning(f'Too many consecutive errors ({self.consecutive_errors}), increasing backoff')
-                        reconnect_delay = min(reconnect_delay * 2, max_reconnect_delay)
-                    
-                    self.logging.info(f'Reconnecting to transmit server in {reconnect_delay} seconds...')
-                    time.sleep(reconnect_delay)
-                    
+
+                    # 재연결 대기 (직전 연결이 유지된 시간 기준 exponential backoff + 지터)
+                    session_duration = (time.monotonic() - connected_at) if connected_at else 0.0
+                    reconnect_delay = next_reconnect_delay(reconnect_delay, session_duration)
+                    connected_at = None
+                    delay = apply_jitter(reconnect_delay)
+                    self.logging.info(f'Reconnecting to transmit server in {delay:.1f} seconds... '
+                                      f'(직전 연결 유지 {session_duration:.1f}초)')
+                    time.sleep(delay)
+
         except Exception as e:
             self.logging.critical(f'Critical error in UnitBoardGetStatus run loop: {e}')
             self.logging.critical(traceback.format_exc())
@@ -676,7 +729,15 @@ class TcpClientThread(threading.Thread):
 
             self.i2c_write_with_retry(self.GPIOADDR2, 0x12, 0x00)
             self.i2c_write_with_retry(self.GPIOADDR2, 0x13, 0x00)
-    
+
+    def i2c_led_control_async(self, on=True):
+        """LED 제어를 별도 스레드에서 수행한다.
+
+        블링크 경로에 sleep(0.5)이 있어 재연결 크리티컬 패스를 그만큼 지연시키므로,
+        에러 처리 중에는 LED 제어가 재연결을 붙잡지 않도록 분리한다.
+        """
+        threading.Thread(target=self.i2c_led_control, kwargs={'on': on}, daemon=True).start()
+
     def run(self):
         """수신 스레드 메인 루프. 내부에서 어떤 예외가 발생해도 스레드 자체는 종료하지 않고
         _receive_loop()를 다시 호출해 재시작한다 (스레드 재생성 없이 자체 복구)."""
@@ -713,7 +774,7 @@ class TcpClientThread(threading.Thread):
         # Config 파일 읽기 with 예외 처리
         config_file = configparser.ConfigParser()
         try:
-            config_result = config_file.read('/home/pi/Projects/cosmo-m/config/config.ini')
+            config_result = config_file.read(ConstDefine.CONFIG_PATH)
             if not config_result:
                 self.logging.error('Config file not found, using default values')
                 config_file['common'] = {'HOST': 'localhost', 'PORT2': '7001'}
@@ -736,25 +797,30 @@ class TcpClientThread(threading.Thread):
         timeout_seconds = 20
         old_data = None
         same_data_cnt = 0
-        reconnect_delay = 1
-        max_reconnect_delay = 60
+        reconnect_delay = INITIAL_RECONNECT_DELAY
+        connected_at = None                 # 연결이 수립된 시각(monotonic)
+        last_receive_time = 0.0             # 마지막 수신 시각. connect 실패 시에도 참조되므로 미리 초기화
 
         while True:
             client = None
             try:
                 self.logging.info(f'Attempting to connect to receive server {ip}:{port}')
                 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                client.settimeout(timeout_seconds)
+                client.settimeout(timeout_seconds)      # 연결 수립까지의 타임아웃
                 client.connect(SERVER_ADDR)
+                configure_tcp_socket(client, self.logging)
+                # 연결 후에는 무수신 판정을 위해 짧은 폴링 타임아웃으로 교체한다
+                client.settimeout(RECEIVE_POLL_TIMEOUT)
+                connected_at = time.monotonic()
+                last_receive_time = connected_at
                 self.logging.info(f'수신 서버에 연결 되었습니다. {ip}:{port}')
-                
+
                 self.socket_event.set()
-                reconnect_delay = 1  # 연결 성공 시 리셋
                 self.consecutive_errors = 0
-                
-                # I2C LED ON with 재시도
-                self.i2c_led_control(on=True)
-                
+
+                # I2C LED ON (재연결 경로를 붙잡지 않도록 별도 스레드에서 처리)
+                self.i2c_led_control_async(on=True)
+
                 # 수신 루프
                 receive_buffer = ""  # 완전한 JSON을 받기 위한 문자열 버퍼
                 while True:
@@ -764,7 +830,8 @@ class TcpClientThread(threading.Thread):
                         if not part:  # 연결이 끊어진 경우
                             self.logging.warning("Connection closed by server")
                             raise socket.error("Connection closed by server")
-                        
+                        last_receive_time = time.monotonic()
+
                         try:
                             receive_buffer += part.decode('UTF-8')
                         except UnicodeDecodeError:
@@ -809,7 +876,13 @@ class TcpClientThread(threading.Thread):
                                     self.logging.error(f'Error sending ACK: {e}')
                                 
                                 # 중복 데이터 체크
-                                if data.get('IDX') == old_data:
+                                # PING은 1초 주기로 오는 keepalive이고 IDX가 반복될 수 있으므로
+                                # 중복 판정 대상에서 제외한다. 제외하지 않으면 연속 PING 3개만으로
+                                # receive_event가 발동해 정상 동작 중인 송신 연결이 강제로 끊긴다.
+                                message_idx = data.get('IDX')
+                                if data.get('CMD') == 'PING' or message_idx is None:
+                                    pass
+                                elif message_idx == old_data:
                                     same_data_cnt += 1
                                     if same_data_cnt > 2:
                                         self.logging.warning(f'Duplicate data detected (IDX: {old_data}), clearing queue')
@@ -835,8 +908,8 @@ class TcpClientThread(threading.Thread):
                                         receive_event.set()
                                 else:
                                     same_data_cnt = 0
-                                old_data = data.get('IDX')
-                                
+                                    old_data = message_idx      # PING은 old_data를 갱신하지 않는다
+
                             except KeyError as e:
                                 self.logging.error(f'Missing key in JSON data: {e}')
                                 self.consecutive_errors += 1
@@ -852,6 +925,15 @@ class TcpClientThread(threading.Thread):
                         time.sleep(0.01)
                         
                     except socket.timeout:
+                        # 서버가 PING을 1초 주기로 보내므로, 일정 시간 아무것도 수신되지 않으면
+                        # FIN 없이 죽은 연결(half-open)로 판단하고 재연결한다.
+                        # 수신 소켓은 읽기 전용이라 쓰기 에러가 절대 발생하지 않으므로,
+                        # 이 판정이 없으면 좀비 연결 상태로 영구히 고착된다.
+                        idle_seconds = time.monotonic() - last_receive_time
+                        if idle_seconds >= RECEIVE_IDLE_TIMEOUT:
+                            raise socket.error(
+                                f'{idle_seconds:.1f}초간 서버로부터 수신 없음(PING 중단), 죽은 연결로 판단하고 재연결')
+
                         # 타임아웃 발생 시 버퍼에 데이터가 있으면 처리 시도
                         if len(receive_buffer) > 0:
                             json_objects, receive_buffer = extract_json_objects(receive_buffer)
@@ -866,7 +948,8 @@ class TcpClientThread(threading.Thread):
                                                                     'NOTE': 'OK'
                                                                     }), 'UTF-8')
                                         self.socket_send_queue.put(ack_msg, block=False)
-                                        old_data = data.get('IDX')
+                                        if data.get('CMD') != 'PING' and data.get('IDX') is not None:
+                                            old_data = data.get('IDX')      # PING은 중복 판정에서 제외
                                     except Exception as e:
                                         self.logging.error(f'Error processing data after timeout: {e}')
                             
@@ -890,9 +973,9 @@ class TcpClientThread(threading.Thread):
             except socket.error as e:
                 self.logging.error(f"Receiver socket error: {e}")
                 self.consecutive_errors += 1
-                
-                # I2C LED OFF (blink) with 재시도
-                self.i2c_led_control(on=False)
+
+                # I2C LED OFF (blink). sleep(0.5)이 포함되므로 재연결을 지연시키지 않도록 별도 스레드에서 처리
+                self.i2c_led_control_async(on=False)
                 
             except Exception as e:
                 self.logging.error(f"Unexpected error in receiver: {e}")
@@ -907,11 +990,12 @@ class TcpClientThread(threading.Thread):
                         self.logging.info('Receiver socket closed')
                 except Exception as e:
                     self.logging.error(f'Error closing receiver socket: {e}')
-                
-                # 재연결 대기 (exponential backoff)
-                if self.consecutive_errors > self.max_error_threshold:
-                    self.logging.warning(f'Too many consecutive errors ({self.consecutive_errors}), increasing backoff')
-                    reconnect_delay = min(reconnect_delay * 2, max_reconnect_delay)
-                
-                self.logging.info(f'Reconnecting to receive server in {reconnect_delay} seconds...')
-                time.sleep(reconnect_delay)
+
+                # 재연결 대기 (직전 연결이 유지된 시간 기준 exponential backoff + 지터)
+                session_duration = (time.monotonic() - connected_at) if connected_at else 0.0
+                reconnect_delay = next_reconnect_delay(reconnect_delay, session_duration)
+                connected_at = None
+                delay = apply_jitter(reconnect_delay)
+                self.logging.info(f'Reconnecting to receive server in {delay:.1f} seconds... '
+                                  f'(직전 연결 유지 {session_duration:.1f}초)')
+                time.sleep(delay)

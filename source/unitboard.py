@@ -956,7 +956,7 @@ class UnitBoard:
        
         try:
             self.config_file = configparser.ConfigParser()  ## 클래스 객체 생성
-            self.config_file.read('/home/pi/Projects/cosmo-m/config/config.ini')  ## 파일 읽기        
+            self.config_file.read(ConstDefine.CONFIG_PATH)  ## 파일 읽기
             self.common_config = self.config_file['common']
             self.shared_memory_size = int(self.common_config['SHARED_MEMORY_SIZE'])
             self.config = self.config_file[f'unit_board{id}']
