@@ -27,9 +27,14 @@ MAX_RECONNECT_DELAY = 15            # 최대 재연결 대기 시간(초). 관�
 STABLE_CONNECTION_SECONDS = 30      # 이 시간 이상 유지된 연결만 정상으로 보고 백오프를 초기화
 RECONNECT_JITTER_RATIO = 0.2        # 재연결 대기 시간에 적용할 지터 비율(±20%)
 
-SERVER_PING_INTERVAL = 1.0          # 서버가 PING을 보내는 주기(초)
-RECEIVE_POLL_TIMEOUT = 2.0          # 수신 소켓 recv 타임아웃(초). 무수신 판정을 위한 폴링 주기
-RECEIVE_IDLE_TIMEOUT = 5.0          # 이 시간 동안 아무것도 수신되지 않으면 죽은 연결로 판단(PING 주기의 5배)
+# 2026-07-30-@K2H 운영 로그 실측값으로 보정.
+# 수신 데이터 도착 간격이 일관되게 4.89~5.11초(평균 5.0초)로 측정되었다.
+# 이전 설정(폴링 2초 / 임계 5초)에서는 판정 시점의 누적 무수신 시간이 매 주기마다
+# 4.5초까지 올라가 임계값 5초를 0.5초 차이로 스쳤고, 서버 타이머가 조금만 흔들려도
+# 정상 연결을 끊을 위험이 있었다.
+SERVER_PING_INTERVAL = 5.0          # 서버가 주기적으로 데이터를 보내는 간격(초). 로그 실측값
+RECEIVE_POLL_TIMEOUT = 3.0          # 수신 소켓 recv 타임아웃(초). 무수신 판정을 위한 폴링 주기
+RECEIVE_IDLE_TIMEOUT = 15.0         # 이 시간 동안 아무것도 수신되지 않으면 죽은 연결로 판단(수신 간격의 3배)
 
 TCP_KEEPALIVE_IDLE = 5              # keepalive 프로브를 시작하기까지의 유휴 시간(초)
 TCP_KEEPALIVE_INTERVAL = 2          # keepalive 프로브 간격(초)
@@ -963,7 +968,12 @@ class TcpClientThread(threading.Thread):
                                     self.logging.error('Too many errors, reconnecting')
                                     raise socket.error('Too many errors')
                         else:
-                            self.logging.debug("Socket Data receive timeout, retrying...")
+                            # 폴링 타임아웃은 정상 동작이므로 매번 기록하지 않는다.
+                            # 무수신이 임계값의 절반을 넘어설 때만 남겨서, 연결이 죽어가는
+                            # 징후만 로그에 드러나게 한다.
+                            if idle_seconds >= RECEIVE_IDLE_TIMEOUT / 2:
+                                self.logging.debug(f'수신 대기 {idle_seconds:.1f}초 경과 '
+                                                   f'(임계 {RECEIVE_IDLE_TIMEOUT}초)')
                             continue
                         
             except socket.timeout:

@@ -160,11 +160,23 @@ def make_logger():
 class DeadPeerDetectionTest(unittest.TestCase):
     """수신 연결이 조용히 죽었을 때 스스로 복구하는지 검증한다."""
 
+    # 테스트 실행 시간을 줄이기 위해 운영값(폴링 3초 / 임계 15초)보다 짧은 값으로 대체한다.
+    # 운영값 자체의 타당성은 KeepaliveTest.test_idle_timeout_exceeds_ping_interval이 검사한다.
+    TEST_POLL_TIMEOUT = 1.0
+    TEST_IDLE_TIMEOUT = 4.0
+
     def setUp(self):
         # config.ini를 읽지 못하게 만들어 client.py의 기본값(localhost:7000/7001)을 쓰게 한다
         self.config_patch = mock.patch.object(configparser.ConfigParser, 'read', return_value=[])
         self.config_patch.start()
         self.addCleanup(self.config_patch.stop)
+
+        # 상수는 실행 시점에 조회되므로 모듈 속성 패치로 대체된다
+        for name, value in (('RECEIVE_POLL_TIMEOUT', self.TEST_POLL_TIMEOUT),
+                            ('RECEIVE_IDLE_TIMEOUT', self.TEST_IDLE_TIMEOUT)):
+            patcher = mock.patch.object(client, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
         template = np.zeros(19 * 50 + 20, dtype=np.int32)
         self.shm = shared_memory.SharedMemory(create=True, size=template.nbytes)
