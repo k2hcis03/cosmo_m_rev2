@@ -399,6 +399,8 @@ class UnitBoardWaterTank(threading.Thread):
         self.gpio_value_old = [False, False, False, False, False, False, False, False]
 
     def run(self):
+        chiller1_motor_log = False
+        chiller2_motor_log = False
         while True:
             try:
                 time.sleep(0.5)  # 0.5초마다 
@@ -419,17 +421,27 @@ class UnitBoardWaterTank(threading.Thread):
                 
                 # 칠러1 모터 제어 명령어 전송
                 if chiller1_motor:
-                    self.logging.info(f'id: {self.id} chiller1 motor is on')   
+                    if not chiller1_motor_log:
+                        self.logging.info(f'id: {self.id} chiller1 motor is on')
+                        chiller1_motor_log = True
                     self.gpio_value[int(self.config['SOLVALVE2'])] = True
                 else:
+                    if chiller1_motor_log:
+                        self.logging.info(f'id: {self.id} chiller1 motor is off')
+                        chiller1_motor_log = False
                     self.gpio_value[int(self.config['SOLVALVE2'])] = False
 
                 # 칠러2 모터 제어 명령어 전송   
                 if chiller2_motor:
-                    self.logging.info(f'id: {self.id} chiller2 motor is on')
+                    if not chiller2_motor_log:
+                        self.logging.info(f'id: {self.id} chiller2 motor is on')
+                        chiller2_motor_log = True
                     # 칠러2 모터 제어 명령어 전송
                     self.gpio_value[int(self.config['SOLVALVE3'])] = True
                 else:
+                    if chiller2_motor_log:
+                        self.logging.info(f'id: {self.id} chiller2 motor is off')
+                        chiller2_motor_log = False
                     self.gpio_value[int(self.config['SOLVALVE3'])] = False
 
                 if self.gpio_value != self.gpio_value_old:
