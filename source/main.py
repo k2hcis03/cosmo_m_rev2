@@ -3,6 +3,7 @@
 import smbus
 import sys
 import os
+import shutil
 import can
 import time
 import signal
@@ -325,6 +326,31 @@ def main():
         logging.critical(f'config.ini 오류로 프로그램을 종료합니다 - {error_message}')
         print(f'\n[치명적 오류] {error_message}\n', file=sys.stderr)
         sys.exit(1)
+
+    # REF_RESTART가 0이면 이전 실행의 ref 상태(ref.json / ref.index / ref.stage / ref.status)를
+    # 이어받지 않으므로, 부팅 시 1회 잔여 데이터를 정리한다.
+    # ref 디렉토리 자체와 그 직하의 파일은 남기고 하위 디렉토리만 삭제하며,
+    # 유닛보드별 디렉토리는 REF 명령 수신 시 unitboard.py에서 다시 생성한다.
+    try:
+        if int(common_config.get('REF_RESTART', 0)) == 0:
+            removed = []
+            failed = []
+            with os.scandir(ConstDefine.DEFAULT_REF_DIR) as entries:
+                ref_sub_dirs = [entry.path for entry in entries if entry.is_dir()]
+            for ref_sub_dir in ref_sub_dirs:
+                shutil.rmtree(ref_sub_dir, ignore_errors=True)
+                if os.path.isdir(ref_sub_dir):
+                    failed.append(os.path.basename(ref_sub_dir))
+                else:
+                    removed.append(os.path.basename(ref_sub_dir))
+            logging.info(f'REF_RESTART=0 이므로 ref 하위 디렉토리를 정리했습니다. '
+                         f'삭제 {len(removed)}개 {removed}')
+            if failed:
+                logging.warning(f'삭제하지 못한 ref 디렉토리가 있습니다: {failed}')
+    except FileNotFoundError:
+        logging.warning(f'ref 디렉토리가 없어 정리를 건너뜁니다: {ConstDefine.DEFAULT_REF_DIR}')
+    except Exception as e:
+        logging.error(f'ref 디렉토리 정리 중 오류 발생: {e}')
 
     tcp_queue = queue.Queue(maxsize=8192)
     main_func = CosmoMain(tcp_queue, config_file)
