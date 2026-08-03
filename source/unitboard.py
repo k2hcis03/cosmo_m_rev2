@@ -1367,23 +1367,30 @@ class UnitBoard:
                                 command_queue.put(message, block=False)
                             elif command['CTRL'][0]['SENSOR_ID'] == '1400':     #로드셀
                                 zero1 = float(command['CTRL'][0]['PARAM0'])
-                                zero2 = int(command['CTRL'][0]['PARAM1'])
+                                on_off = command['CTRL'][0]['PARAM1']
 
-                                if zero1 == 0.:
+                                if on_off == 'ON':
+                                    if zero1 == 0.:
+                                        message = {"UNIT_ID" : id,                  
+                                                "CMD":"LOAD_ZERO",
+                                                "SEND" : True}  
+                                    else:
+                                        x = self.config["SOLVALVE1"]                #밸브 I/O 번호
+                                        value = ON
+                                        temp = int(float(command['CTRL'][0]['PARAM0']) * 10) # 소수점 1자리까지 유효 ex) 38.2 ->38.2kg
+                                        ontime = int(self.config["WATER_VALVE_ON_TIME"])
+                                        message = {"UNIT_ID" : id,                  
+                                                    "CMD":"WEIGHT_VALVE",
+                                                    "CHANNEL": x,
+                                                    "VALUE" : value,
+                                                    "WEIGHT" : temp, 
+                                                    "ONTIME" : ontime}  
+                                else :  # 물공급 밸브 OFF
                                     message = {"UNIT_ID" : id,                  
-                                            "CMD":"LOAD_ZERO",
-                                            "SEND" : True}  
-                                else:
-                                    x = self.config["SOLVALVE1"]                #밸브 I/O 번호
-                                    value = ON
-                                    temp = int(float(command['CTRL'][0]['PARAM0']) * 10) # 소수점 1자리까지 유효 ex) 38.2 ->38.2kg
-                                    ontime = int(self.config["WATER_VALVE_ON_TIME"])
-                                    message = {"UNIT_ID" : id,                  
-                                                "CMD":"WEIGHT_VALVE",
-                                                "CHANNEL": x,
-                                                "VALUE" : value,
-                                                "WEIGHT" : temp, 
-                                                "ONTIME" : ontime}  
+                                                "CMD":"SET_GPIO_EX",
+                                                "CHANNEL": self.config["SOLVALVE1"],
+                                                "VALUE" : OFF,
+                                                "SEND" : True}
                                 command_queue.put(message, block=False)
                             elif command['CTRL'][0]['SENSOR_ID'] == '1900' or command['CTRL'][0]['SENSOR_ID'] == '1901' or command['CTRL'][0]['SENSOR_ID'] == '1902':    # 물탱크 모터 번호 1900 = 원수 1901 = 칠러1 1902 = 칠러2 
                                if self.config['TANK_TYPE'] == '6':   # 물탱크 유닛보드이면
