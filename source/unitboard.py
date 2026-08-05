@@ -496,6 +496,7 @@ class UnitBoardTempControl(threading.Thread):
         self.writer_csv = None              # CSV 파일 핸들
         self.cold_valve_control_timer = False    # 타이머로 제어 할 때, 시간 마다 한 번만 제어 하기위한 변수
         self.motor_rpm = 0                  # 모터 현재 속도
+        self.loadcell = 0                  # 로드셀 현재 값
         self.ref_continue = False          # 기존 reference 데이터를 사용할지 새로운 reference 데이터를 사용할지 결정
         self.ref_index = 0                  # reference 데이터 인덱스
         self.ref_file_name = None           # reference 데이터 파일 이름
@@ -654,7 +655,7 @@ class UnitBoardTempControl(threading.Thread):
                                     self.writer = csv.writer(self.writer_csv, delimiter=',')
                                     self.writer.writerow(['time'] + ['ref.temp'] + ['current temp'] + ['valve on time'] + ['relay1_water'] + ['relay2_cold'] + 
                                                         ['relay3_res1'] + ['relay4_res2'] + ['rpm'] + ['analog1_up'] + ['analog3_res1'] + ['analog4_res2'] + 
-                                                        ['analog5_res3'] +['analog6_res4'] + ['analog7_res5'] + ['analog8_res6']) 
+                                                        ['analog5_res3'] +['analog6_res4'] + ['analog7_res5'] + ['analog8_res6'] + ['load cell']) 
                             else:
                                 # self.ref_continue == False일 때 dir_data_name이 None일 수 있으므로 초기화 필요
                                 if self.dir_data_name is None:
@@ -665,7 +666,7 @@ class UnitBoardTempControl(threading.Thread):
                                 self.writer = csv.writer(self.writer_csv, delimiter=',')
                                 self.writer.writerow(['time'] + ['ref.temp'] + ['current temp'] + ['valve on time'] + ['relay1_water'] + ['relay2_cold'] + 
                                                     ['relay3_res1'] + ['relay4_res2'] + ['rpm'] + ['analog1_up'] + ['analog3_res1'] + ['analog4_res2'] + 
-                                                    ['analog5_res3'] +['analog6_res4'] + ['analog7_res5'] + ['analog8_res6'])   
+                                                    ['analog5_res3'] +['analog6_res4'] + ['analog7_res5'] + ['analog8_res6'] + ['load cell'])   
 
                                 # csv.txt는 온도 제어 시퀀스가 재시작될 때, 로그를 이어 쓸 CSV 디렉토리 경로를 기억해두는 용도
                                 if int(self.common_config['REF_RESTART']) == 1:
@@ -752,7 +753,8 @@ class UnitBoardTempControl(threading.Thread):
                                     # current_ext_humi1 = self.shared_memory_u[0x0D + self.id*self.shared_memory_size] * 0.1 #Ext Humi1
                                     # current_ext_temp2 = self.shared_memory_u[0x0E + self.id*self.shared_memory_size] * 0.1 #Ext Temp2
                                     # current_ext_humi2 = self.shared_memory_u[0x0F + self.id*self.shared_memory_size] * 0.1 #Ext Humi2
-                                    self.motor_rpm = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_RPM + self.id*self.shared_memory_size]          #RPM
+                                    self.motor_rpm = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_RPM + self.id*self.shared_memory_size]           #RPM
+                                    self.loadcell = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_LOADCELL + self.id*self.shared_memory_size]       #loadcell
 
                                     gpo0_7 = (self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_GPO0_7 + self.id*self.shared_memory_size]) & 0xFF
                                     gpio1 = (gpo0_7 >> 7) & 0x01
@@ -768,7 +770,7 @@ class UnitBoardTempControl(threading.Thread):
                                         self.writer.writerow([round(time.time(), 2), round(ref_temp, 2), round(analog2, 2), round(self.cold_valve_on_time, 2), 
                                                               round(gpio1, 2), round(gpio2, 2), round(gpio3, 2), round(gpio4, 2), round(self.motor_rpm, 2), 
                                                               round(analog1, 2), round(analog3, 2), round(analog4, 2), round(analog5, 2), round(analog6, 2), 
-                                                              round(analog7, 2), round(analog8, 2)])
+                                                              round(analog7, 2), round(analog8, 2), round(self.loadcell, 2)])
                                         print(f'id: {self.id} period: {time.time()} time to on: {self.cold_valve_on_time} REF.TEMP: {ref_temp} and CURRENT.TEMP: {analog2:0.2F}')
                                         
                                         # print(f'id: {self.id} analog1: {analog1} analog3: {analog3} analog4: {analog4} analog5: {analog5} and analog6: {analog6}')
@@ -776,7 +778,7 @@ class UnitBoardTempControl(threading.Thread):
                                         
                                     if self.config["TEMP_CONTROL"] == 'PID':
                                         inc = self.pid(analog2)
-                                        self.cold_valve_on_time = round(inc)                        #소수점 첫번째에서 반올림
+                                        self.cold_valve_on_time = round(inc)                #소수점 첫번째에서 반올림
                                         self.pid_timer_call_time = 49                       #타이머 호출 회수 -1
                                         pid_t = Timer(0.1, self.pid_task).start()           #0.1초 타이머
                                     elif self.config["TEMP_CONTROL"] == 'TIMER':
