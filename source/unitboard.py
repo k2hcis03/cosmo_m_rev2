@@ -754,7 +754,7 @@ class UnitBoardTempControl(threading.Thread):
                                     # current_ext_temp2 = self.shared_memory_u[0x0E + self.id*self.shared_memory_size] * 0.1 #Ext Temp2
                                     # current_ext_humi2 = self.shared_memory_u[0x0F + self.id*self.shared_memory_size] * 0.1 #Ext Humi2
                                     self.motor_rpm = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_RPM + self.id*self.shared_memory_size]           #RPM
-                                    self.loadcell = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_LOADCELL + self.id*self.shared_memory_size]       #loadcell
+                                    self.loadcell = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_LOAD_CELL + self.id*self.shared_memory_size]       #loadcell
 
                                     gpo0_7 = (self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_GPO0_7 + self.id*self.shared_memory_size]) & 0xFF
                                     gpio1 = (gpo0_7 >> 7) & 0x01
