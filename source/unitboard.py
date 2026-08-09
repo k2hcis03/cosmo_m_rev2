@@ -588,9 +588,9 @@ class UnitBoardTempControl(threading.Thread):
                             self.file_index  = 1
                             self.file_write = False
                         except Exception as e:
-                            self.logging.error(f'id: {id} 기존 ref_datas 읽어오는 중 오류 발생: {e}')
+                            self.logging.error(f'id: {self.id} 기존 ref_datas 읽어오는 중 오류 발생: {e}')
                     else:
-                        self.logging.info(f"id: {id} : {self.ref_file_name} file is not exist 새로운 refernce로 진행합니다.")
+                        self.logging.info(f"id: {self.id} : {self.ref_file_name} file is not exist 새로운 refernce로 진행합니다.")
                         self.ref_continue = False
                     
                     self.ref_file_index = self.dir_name+'/ref.index'
@@ -601,20 +601,20 @@ class UnitBoardTempControl(threading.Thread):
                         try:
                             with open(self.ref_file_index, 'r', encoding='utf-8') as f:
                                 self.ref_index = int(f.read())
-                            self.logging.info(f"id: {id} : ref.index 파일을 읽어왔습니다. {self.ref_index}")
+                            self.logging.info(f"id: {self.id} : ref.index 파일을 읽어왔습니다. {self.ref_index}")
                         except Exception as e:
                             self.ref_index = self.ref_total  #ref.index 파일이 없으면 for문 동작 시키지 않음
-                            self.logging.error(f"id: {id} : ref.index 파일 읽기 중 오류 발생: {e}")
+                            self.logging.error(f"id: {self.id} : ref.index 파일 읽기 중 오류 발생: {e}")
 
                         try:
                             with open(self.ref_file_stage, 'r', encoding='utf-8') as f:
                                 self.ref_stage = int(f.read())
                                 temp = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_STATE + self.id*self.shared_memory_size] & 0x0000FFFF
                                 self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_STATE + self.id*self.shared_memory_size] = self.ref_stage << 16 | temp
-                            self.logging.info(f"id: {id} : ref.stage 파일을 읽어왔습니다. {self.ref_stage}")
+                            self.logging.info(f"id: {self.id} : ref.stage 파일을 읽어왔습니다. {self.ref_stage}")
                         except Exception as e:
                             self.ref_stage = 0  #ref.stage 파일이 없으면 0으로 설정
-                            self.logging.error(f"id: {id} : ref.stage 파일 읽기 중 오류 발생: {e}")
+                            self.logging.error(f"id: {self.id} : ref.stage 파일 읽기 중 오류 발생: {e}")
 
                         try:
                             with open(self.ref_file_status, 'r', encoding='utf-8') as f:
@@ -622,10 +622,10 @@ class UnitBoardTempControl(threading.Thread):
                                 temp = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_STATE + self.id*self.shared_memory_size] & -65536  # 0xFFFF0000의 int32 2의 보수 표현 (numpy 2.x는 이 범위를 넘는 python int 리터럴을 int32 배열에 직접 연산하면 OverflowError 발생)
                                 self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_STATE + self.id*self.shared_memory_size] = temp | self.ref_status
                                 
-                            self.logging.info(f"id: {id} : ref.status 파일을 읽어왔습니다. {self.ref_status}")
+                            self.logging.info(f"id: {self.id} : ref.status 파일을 읽어왔습니다. {self.ref_status}")
                         except Exception as e:
                             self.ref_status = "None"  #ref.status 파일이 없으면 None으로 설정
-                            self.logging.error(f"id: {id} : ref.status 파일 읽기 중 오류 발생: {e}")
+                            self.logging.error(f"id: {self.id} : ref.status 파일 읽기 중 오류 발생: {e}")
                     else:
                         self.ref_index = 0
                         self.event.wait()
@@ -1001,7 +1001,7 @@ class UnitBoard:
             water_tank_thread = UnitBoardWaterTank(id, logging, shared_memory_u, self.shared_memory_size, unit_semaphor, 
             self.config, self.common_config, command_queue)
             water_tank_thread.start()
-            logging.info(f'id: {id} UnitBoard WaterWeight Thread Run')
+            logging.info(f'id: {self.id} UnitBoard WaterWeight Thread Run')
         last_version_poll = time.time()   # GET_VERSION 주기 요청을 위한 마지막 전송 시각
         while True:
             try:
@@ -1010,17 +1010,17 @@ class UnitBoard:
                 
                 if  command['CMD'] != 'GET_STATUS' and command['CMD'] != 'PING' and command['CMD'] != 'LED_STATUS' and command['CMD'] != 'PING_UNIT_BOARD':         # GET_STATUS는 계속 호출 되므로 log에 출력 하지 않음.
                     if command['CMD'] == 'REF':
-                        logging.info(f"{command['CMD']} command is inserted to {id} Unit Board")
+                        logging.info(f"id: {self.id} {command['CMD']} command is inserted")
                     elif command['CMD'] == 'STATE':
-                        logging.info(f"{command['CMD']} command is inserted to {id} Unit Board")
+                        logging.info(f"id: {self.id} {command['CMD']} command is inserted")
                     elif command['CMD'] == 'TEMP_VALVE':
-                        logging.info(f"{command['CMD']} and valve status {command['VALUE']} command is inserted to {id} Unit Board")
+                        logging.info(f"id: {self.id} {command['CMD']} and valve status {command['VALUE']} command is inserted")
                     elif command['CMD'] == 'WEIGHT_VALVE':
-                        logging.info(f"{command['CMD']} and valve status {command['VALUE']} command is inserted to {id} Unit Board")
+                        logging.info(f"id: {self.id} {command['CMD']} and valve status {command['VALUE']} command is inserted")
                     elif command['CMD'] == 'TEMP_RPM':
-                        logging.info(f"{command['CMD']} and rpm speed {command['SPEED']} command is inserted to {id} Unit Board")
+                        logging.info(f"id: {self.id} {command['CMD']} and rpm speed {command['SPEED']} command is inserted")
                     else:
-                        logging.info(f"{command['CMD']} command is inserted to {id} Unit Board")
+                        logging.info(f"id: {self.id} {command['CMD']} command is inserted")
                 
                 self.i2c_semaphor.acquire()
                 i2cbus = smbus.SMBus(1)

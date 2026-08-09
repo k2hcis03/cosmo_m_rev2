@@ -286,7 +286,7 @@ class UnitBoardGetStatus(threading.Thread):
                         if x < len(humi_index):
                             mem_idx = base_index + humi_index[x]
                             if mem_idx < len(self.shared_memory):
-                                self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1200+x}","VALUE":f"{self.shared_memory[mem_idx]:0.2F}"})  # 습도는 유닛보드에서 *1000을 안함(오버플로우)
+                                self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1200+x}","VALUE":f"{self.shared_memory[mem_idx]*0.1:0.2F}"})  # 습도는 유닛보드에서 *1000을 안함(오버플로우)
                     
                     for x in range(int(unit_config.get('CO2_NUM', 0))):
                         if x < len(co2_index):
