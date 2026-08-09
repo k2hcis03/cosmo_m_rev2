@@ -1001,7 +1001,7 @@ class UnitBoard:
             water_tank_thread = UnitBoardWaterTank(id, logging, shared_memory_u, self.shared_memory_size, unit_semaphor, 
             self.config, self.common_config, command_queue)
             water_tank_thread.start()
-            logging.info(f'id: {self.id} UnitBoard WaterWeight Thread Run')
+            logging.info(f'id: {id} UnitBoard WaterWeight Thread Run')
         last_version_poll = time.time()   # GET_VERSION 주기 요청을 위한 마지막 전송 시각
         while True:
             try:
@@ -1010,17 +1010,17 @@ class UnitBoard:
                 
                 if  command['CMD'] != 'GET_STATUS' and command['CMD'] != 'PING' and command['CMD'] != 'LED_STATUS' and command['CMD'] != 'PING_UNIT_BOARD':         # GET_STATUS는 계속 호출 되므로 log에 출력 하지 않음.
                     if command['CMD'] == 'REF':
-                        logging.info(f"id: {self.id} {command['CMD']} command is inserted")
+                        logging.info(f"id: {id} {command['CMD']} command is inserted")
                     elif command['CMD'] == 'STATE':
-                        logging.info(f"id: {self.id} {command['CMD']} command is inserted")
+                        logging.info(f"id: {id} {command['CMD']} command is inserted")
                     elif command['CMD'] == 'TEMP_VALVE':
-                        logging.info(f"id: {self.id} {command['CMD']} and valve status {command['VALUE']} command is inserted")
+                        logging.info(f"id: {id} {command['CMD']} and valve status {command['VALUE']} command is inserted")
                     elif command['CMD'] == 'WEIGHT_VALVE':
-                        logging.info(f"id: {self.id} {command['CMD']} and valve status {command['VALUE']} command is inserted")
+                        logging.info(f"id: {id} {command['CMD']} and valve status {command['VALUE']} command is inserted")
                     elif command['CMD'] == 'TEMP_RPM':
-                        logging.info(f"id: {self.id} {command['CMD']} and rpm speed {command['SPEED']} command is inserted")
+                        logging.info(f"id: {id} {command['CMD']} and rpm speed {command['SPEED']} command is inserted")
                     else:
-                        logging.info(f"id: {self.id} {command['CMD']} command is inserted")
+                        logging.info(f"id: {id} {command['CMD']} command is inserted")
                 
                 self.i2c_semaphor.acquire()
                 i2cbus = smbus.SMBus(1)
