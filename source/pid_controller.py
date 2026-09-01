@@ -1,11 +1,4 @@
 from simple_pid import PID
-import time
-
-# Constants
-setpoint = 15.0  # Target temperature
-Kp = 1.0  # Proportional gain
-Ki = 0.5  # Integral gain
-Kd = 0.1  # Derivative gain
 
 def _clamp(value, limits):
     lower, upper = limits

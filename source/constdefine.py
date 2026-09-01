@@ -12,11 +12,13 @@ class ConstDefine:
     CONFIG_PATH = '/home/pi/Projects/cosmo-m/config/config.ini'
     DEFAULT_REF_DIR = '/home/pi/Projects/cosmo-m/ref/'
 
-    # 기타 예시 상수 (필요에 따라 추가)
+
+    # 기타 예시 상수 (필요에 따라 추가) 
+    # https://superficial-rook-a29.notion.site/PID-3cea84305580807db5d0ec1cb4cefb1e?source=copy_link 
     DEFAULT_SETPOINT = 15.0
-    DEFAULT_KP = 1.0
-    DEFAULT_KI = 0.5
-    DEFAULT_KD = 0.1
+    DEFAULT_KP = 5.0
+    DEFAULT_KI = 0.02
+    DEFAULT_KD = 0.5
 
     # 타이머 관련 상수
     PID_TIMER_INTERVAL = 0.1  # seconds

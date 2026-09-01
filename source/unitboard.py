@@ -21,11 +21,6 @@ import datetime
 from constdefine import ConstDefine
 import queue
 
-setpoint = 15.0  # Target temperature
-Kp = 1.0  # Proportional gain
-Ki = 0.5  # Integral gain
-Kd = 0.1  # Derivative gain
-
 ON = 1
 OFF = 0
 # g_file_path = "./data/JSON_Ref_Stage101.txt"
@@ -467,10 +462,11 @@ class UnitBoardTempControl(threading.Thread):
         self.event = event
         self.pid_timer_event = threading.Event()
         self.command_queue = command_queue
-        self.pid = PID_COSMO_M(Kp, Ki, Kd, setpoint=setpoint)
-        # Set output limits (heating/cooling power)
+        self.pid = PID_COSMO_M(ConstDefine.DEFAULT_KP, ConstDefine.DEFAULT_KI, ConstDefine.DEFAULT_KD,
+                                setpoint=ConstDefine.DEFAULT_SETPOINT)
+        # PID 출력 = 냉각 밸브 ON 시간(0.1초 단위 tick). 0~50 → 5초 주기 내 0~5초까지 밸브 ON 가능(duty 상한)
         self.pid.output_limits = (0, 50)
-        self.pid.sample_time = 5  # Update every 0.01 seconds
+        self.pid.sample_time = 5  # PID 재계산 주기: 5초마다 한 번씩만 출력 갱신
 
         self.shared_memory_u = shared_memory
         self.shared_memory_size = shared_memory_size
