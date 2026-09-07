@@ -464,14 +464,15 @@ class UnitBoardTempControl(threading.Thread):
         self.command_queue = command_queue
         self.pid = PID_COSMO_M(ConstDefine.DEFAULT_KP, ConstDefine.DEFAULT_KI, ConstDefine.DEFAULT_KD,
                                 setpoint=ConstDefine.DEFAULT_SETPOINT)
-        # PID 출력 = 냉각 밸브 ON 시간(0.1초 단위 tick). 0~50 → 5초 주기 내 0~5초까지 밸브 ON 가능(duty 상한)
-        self.pid.output_limits = (0, 50)
-        self.pid.sample_time = 5  # PID 재계산 주기: 5초마다 한 번씩만 출력 갱신
-
+        # PID 출력 = 냉각 밸브 ON 시간(0.1초 단위 tick). 0~100 → 10초 주기 내 0~10초까지 밸브 ON 가능(duty 상한)
+        self.pid.output_limits = (0, 100)
+        self.pid.sample_time = 10  # PID 재계산 주기: 10초마다 한 번씩만 출력 갱신
+        # self.pid.output_limits = (0, 50)
+        # self.pid.sample_time = 5  # PID 재계산 주기: 5초마다 한 번씩만 출력 갱신
         self.shared_memory_u = shared_memory
         self.shared_memory_size = shared_memory_size
         self.cold_valve_on_time = 0                 # Valve 릴레이가 ON되는 시간 변수
-        self.pid_timer_call_time = 0        # pid or timer 계산 시간 5초. 0.1초 단위이므로 50
+        self.pid_timer_call_time = 0        # pid or timer 계산 시간 1초. 0.1초 단위이므로 50
         self.unit_semaphor = unit_semaphor
         
         self.config = config
@@ -498,7 +499,8 @@ class UnitBoardTempControl(threading.Thread):
         self.ref_file_name = None           # reference 데이터 파일 이름
         self.dir_data_name = None           # data 디렉토리 이름
         self.common_config = common_config
-    
+        self.cold_valve_on_time_save = 0          # 냉각수 밸브 ON 시간 저장 변수
+
     def set_cold_valve(self, value):
         self.cold_valve_status = value
         x = self.config["SOLVALVE2"]        #냉각수 밸브 I/O 번호
@@ -512,11 +514,12 @@ class UnitBoardTempControl(threading.Thread):
         if self.pid_timer_call_time > 0 and self.temp_control_start:            
             if self.cold_valve_on_time:
                 if self.cold_valve_status == 0:
-                    self.cold_valve_on_time -= 1
                     self.set_cold_valve(ON)
             else:
                 if self.cold_valve_status == 1:
                     self.set_cold_valve(OFF) 
+            if self.cold_valve_on_time > 0:
+                self.cold_valve_on_time -= 1
             self.pid_timer_call_time -= 1
             Timer(0.1, self.pid_task).start()
         else:
@@ -527,7 +530,6 @@ class UnitBoardTempControl(threading.Thread):
         if self.pid_timer_call_time > 0 and self.temp_control_start:            
             if self.cold_valve_on_time > 0 and self.cold_valve_control_timer:        # self.time_to_on시간 동안 valve를 ON 시킴 모터 속도가 100이하 또는 cold valve가 0일 때만 모터 명령어 전송
                 if self.cold_valve_status == 0:
-                    self.cold_valve_on_time -= 1
                     self.set_cold_valve(ON)
                     # 온도 제어할 때, 모터가 100rpm보다 느린상태라면 구동 시킴
                     ref_rpm = int(self.config["TEMP_CONTROL_MOTOR_RPM"])
@@ -542,6 +544,8 @@ class UnitBoardTempControl(threading.Thread):
                                         "SEND" : False}    
                         self.command_queue.put(message, block=False) 
                         # self.logging.info(f"{message['CMD']} command is inserted Unit Board")
+                if self.cold_valve_on_time > 0:
+                    self.cold_valve_on_time -= 1
             else:
                 if self.cold_valve_status == 1:
                     self.set_cold_valve(OFF) 
@@ -763,11 +767,11 @@ class UnitBoardTempControl(threading.Thread):
                                     gpio8 = (gpo0_7 >> 0) & 0x01
 
                                     if self.file_write_state:                               #STATE가 Run이면 True Pause면 False
-                                        self.writer.writerow([round(time.time(), 2), round(ref_temp, 2), round(analog2, 2), round(self.cold_valve_on_time, 2), 
+                                        self.writer.writerow([round(time.time(), 2), round(ref_temp, 2), round(analog2, 2), round(self.cold_valve_on_time_save, 2), 
                                                               round(gpio1, 2), round(gpio2, 2), round(gpio3, 2), round(gpio4, 2), round(self.motor_rpm, 2), 
                                                               round(analog1, 2), round(analog3, 2), round(analog4, 2), round(analog5, 2), round(analog6, 2), 
                                                               round(analog7, 2), round(analog8, 2), round(self.loadcell, 2)])
-                                        print(f'id: {self.id} period: {time.time()} time to on: {self.cold_valve_on_time} REF.TEMP: {ref_temp} and CURRENT.TEMP: {analog2:0.2F}')
+                                        print(f'id: {self.id} period: {time.time()} time to on: {self.cold_valve_on_time_save} REF.TEMP: {ref_temp} and CURRENT.TEMP: {analog2:0.2F}')
                                         
                                         # print(f'id: {self.id} analog1: {analog1} analog3: {analog3} analog4: {analog4} analog5: {analog5} and analog6: {analog6}')
                                         # print(f'id: {self.id} gpio1: {gpio1} gpio2: {gpio2} gpio3: {gpio3} gpio4: {gpio4} and gpio5: {gpio5}') 
@@ -775,13 +779,16 @@ class UnitBoardTempControl(threading.Thread):
                                     if self.config["TEMP_CONTROL"] == 'PID':
                                         inc = self.pid(analog2)
                                         self.cold_valve_on_time = round(inc)                #소수점 첫번째에서 반올림
-                                        self.pid_timer_call_time = 49                       #타이머 호출 회수 -1
+                                        self.cold_valve_on_time_save = self.cold_valve_on_time
+                                        self.pid_timer_call_time = 99                       #타이머 호출 회수 -1
                                         pid_t = Timer(0.1, self.pid_task).start()           #0.1초 타이머
                                     elif self.config["TEMP_CONTROL"] == 'TIMER':
                                         if ref_temp < analog2:
                                             self.cold_valve_on_time = int(self.config["TEMP_CONTROL_TIME"]) 
+                                            self.cold_valve_on_time_save = self.cold_valve_on_time
                                         else:
                                             self.cold_valve_on_time = 0
+                                            self.cold_valve_on_time_save = 0
                                         self.pid_timer_call_time = 9  
                                         timer_t = Timer(1, self.timer_task).start()         #1초 타이머
                                         
@@ -1097,6 +1104,7 @@ class UnitBoard:
                                     temp_thread.file_write = True
                                     temp_thread.file_write_state = True
                                     temp_thread.file_index  += 1
+                                    temp_thread.pid.reset()
                                     event.set()
                                 shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_STATE + id*self.shared_memory_size] = int(command['STAGE']) << 16 | 0
                                 status = 2
@@ -1123,7 +1131,7 @@ class UnitBoard:
                                 temp_thread.file_index = 0
                                 temp_thread.ref_datas.clear()
                                 temp_thread.dir_data_name = f"/home/pi/Projects/cosmo-m/data/{datetime.datetime.now().strftime('%y%m%d_%H%M%S')}"
-                                shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_STATE + id*self.shared_memory_size] = int(command['STAGE']) << 16 | 0
+                                temp_thread.pid.reset()
                                 logging.info(f'id: {id} reference data status is  Initial')
                                 status = 4
                             elif command['STATUS'] == 'Error':
