@@ -500,7 +500,7 @@ class UnitBoardTempControl(threading.Thread):
         self.dir_data_name = None           # data 디렉토리 이름
         self.common_config = common_config
         self.cold_valve_on_time_save = 0          # 냉각수 밸브 ON 시간 저장 변수
-
+        self.motor_pid_start_time = 0
     def set_cold_valve(self, value):
         self.cold_valve_status = value
         x = self.config["SOLVALVE2"]        #냉각수 밸브 I/O 번호
@@ -515,6 +515,17 @@ class UnitBoardTempControl(threading.Thread):
             if self.cold_valve_on_time:
                 if self.cold_valve_status == 0:
                     self.set_cold_valve(ON)
+
+                if self.motor_rpm < 100 and  time.time() > self.motor_pid_start_time:  # 모터 속도가 100rpm보다 느리면 모터 구동 명령어 전송
+                    self.motor_pid_start_time = time.time() + 10.0                      
+                    message = {"UNIT_ID" : self.id,                  
+                                "CMD":"TEMP_RPM",
+                                "SPEED" : int(self.config["MIN_RPM"]), 
+                                "DIR"   : 'RV',            #FW = forward, RV = reverse
+                                "ONOFF" : 'ON', 
+                                "TIME" : int(self.cold_valve_on_time * 0.1 + 10),  # 냉각수 밸브 ON 시간 + 10초
+                                "SEND" : False}    
+                    self.command_queue.put(message, block=False)
             else:
                 if self.cold_valve_status == 1:
                     self.set_cold_valve(OFF) 
@@ -536,12 +547,12 @@ class UnitBoardTempControl(threading.Thread):
                     ref_motor_time = int(self.config["TEMP_CONTROL_MOTOR_TIME"])
                     if self.motor_rpm < 100:                      
                         message = {"UNIT_ID" : self.id,                  
-                                        "CMD":"TEMP_RPM",
-                                        "SPEED" : ref_rpm, 
-                                        "DIR"   : 'RV',            #FW = forward, RV = reverse
-                                        "ONOFF" : 'ON', 
-                                        "TIME" : ref_motor_time,
-                                        "SEND" : False}    
+                                    "CMD":"TEMP_RPM",
+                                    "SPEED" : ref_rpm, 
+                                    "DIR"   : 'RV',            #FW = forward, RV = reverse
+                                    "ONOFF" : 'ON', 
+                                    "TIME" : ref_motor_time,
+                                    "SEND" : False}    
                         self.command_queue.put(message, block=False) 
                         # self.logging.info(f"{message['CMD']} command is inserted Unit Board")
                 if self.cold_valve_on_time > 0:
@@ -716,14 +727,24 @@ class UnitBoardTempControl(threading.Thread):
                             # ref_rpm = 1000
                             #################################################
                             # 레퍼런스 데이터에서 모터를 구동시키면 아래 동작함.
-                            message = {"UNIT_ID" : self.id,                  
-                                        "CMD":"TEMP_RPM",
-                                        "SPEED" : ref_rpm, 
-                                        "DIR"   : 'RV',            #FW = forward, RV = reverse
-                                        "ONOFF" : 'ON', 
-                                        "TIME" : ref_motor_time,
-                                        "SEND" : False}    
-                            self.command_queue.put(message, block=False) 
+                            if self.config["TEMP_CONTROL"] == 'TIMER':
+                                message = {"UNIT_ID" : self.id,                  
+                                            "CMD":"TEMP_RPM",
+                                            "SPEED" : ref_rpm, 
+                                            "DIR"   : 'RV',            #FW = forward, RV = reverse
+                                            "ONOFF" : 'ON', 
+                                            "TIME" : ref_motor_time,
+                                            "SEND" : False}    
+                                self.command_queue.put(message, block=False) 
+                            elif self.config["TEMP_CONTROL"] == 'PID' and self.cold_valve_on_time == 0: # PID 제어이고 레퍼런스 온도가 더 낮으면 레시피가 모터제어 관여
+                                message = {"UNIT_ID" : self.id,                  
+                                            "CMD":"TEMP_RPM",
+                                            "SPEED" : ref_rpm, 
+                                            "DIR"   : 'RV',            #FW = forward, RV = reverse
+                                            "ONOFF" : 'ON', 
+                                            "TIME" : ref_motor_time,
+                                            "SEND" : False}    
+                                self.command_queue.put(message, block=False)
                             # self.logging.info(f"id: {self.id} : {message['CMD']} command is inserted Unit Board")
                             # self.logging.info(f'id: {self.id} UnitBoard Temp Control Thread {x} Step Start at {time_start} Time')
                             self.cold_valve_control_timer = True     # ref_step마다 한번씩 ON 해준다.
@@ -1088,6 +1109,8 @@ class UnitBoard:
                                 status = 0
                             elif command['STATUS'] == 'Stop':
                                 temp_thread.temp_control_start = False
+                                temp_thread.cold_valve_on_time = 0
+                                temp_thread.cold_valve_on_time_save = 0
                                 shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_STATE + id*self.shared_memory_size] = int(command['STAGE']) << 16 | 0
                                 status = 1
                             elif command['STATUS'] == 'Run':
@@ -1132,6 +1155,8 @@ class UnitBoard:
                                 temp_thread.ref_datas.clear()
                                 temp_thread.dir_data_name = f"/home/pi/Projects/cosmo-m/data/{datetime.datetime.now().strftime('%y%m%d_%H%M%S')}"
                                 temp_thread.pid.reset()
+                                temp_thread.cold_valve_on_time = 0
+                                temp_thread.cold_valve_on_time_save = 0
                                 logging.info(f'id: {id} reference data status is  Initial')
                                 status = 4
                             elif command['STATUS'] == 'Error':

@@ -73,6 +73,11 @@ class PID_COSMO_M(PID):
             # Add the proportional error on measurement to error_sum
             self._proportional -= self.Kp * d_input
 
+        # 오차 부호가 바뀌면(냉각 필요 <-> 불필요 전환되는 순간) 이전 방향으로 쌓인 적분 잔량을 리셋
+        # (같은 방향이 계속 유지되는 동안은 적분을 그대로 누적시켜 수렴 속도를 유지한다)
+        if (self._last_error is not None) and (error * self._last_error < 0):
+            self._integral = 0
+
         # Compute integral and derivative terms
         self._integral += self.Ki * error * dt
         self._integral = _clamp(self._integral, self.output_limits)  # Avoid integral windup
