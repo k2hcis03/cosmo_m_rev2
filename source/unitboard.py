@@ -76,35 +76,35 @@ class UnitBoardCanFdReceive(threading.Thread):
 
                             I_mA = (np.float32)(message.data[2] << 8 | message.data[3])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
                             T = -10 + (I_mA - 4) * (110) / 16                  
-                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP1 + id*self.shared_memory_size] = (np.int32)(T * 1000)
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP1 + id*self.shared_memory_size] = (np.int32)(T * 1000) + float(self.config.get('ADC_1_OFFSET', 0))  # ADC_1_OFFSET 값을 적용하여 보정
 
                             I_mA = (np.float32)(message.data[4] << 8 | message.data[5])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
                             T = -10 + (I_mA - 4) * (110) / 16                   
-                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP2 + id*self.shared_memory_size] = (np.int32)(T * 1000)
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP2 + id*self.shared_memory_size] = (np.int32)(T * 1000) + float(self.config.get('ADC_2_OFFSET', 0))  # ADC_2_OFFSET 값을 적용하여 보정
 
                             I_mA = (np.float32)(message.data[6] << 8 | message.data[7])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
                             T = -10 + (I_mA - 4) * (110) / 16                   
-                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP3 + id*self.shared_memory_size] = (np.int32)(T * 1000)
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP3 + id*self.shared_memory_size] = (np.int32)(T * 1000) + float(self.config.get('ADC_3_OFFSET', 0))  # ADC_3_OFFSET 값을 적용하여 보정
 
                             I_mA = (np.float32)(message.data[8] << 8 | message.data[9])*0.001
                             T = -10 + (I_mA - 4) * (110) / 16                  
-                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP4 + id*self.shared_memory_size] = (np.int32)(T * 1000)
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP4 + id*self.shared_memory_size] = (np.int32)(T * 1000) + float(self.config.get('ADC_4_OFFSET', 0))  # ADC_4_OFFSET 값을 적용하여 보정
 
                             I_mA = (np.float32)(message.data[10] << 8 | message.data[11])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
                             T = -10 + (I_mA - 4) * (110) / 16                    
-                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP5 + id*self.shared_memory_size] = (np.int32)(T * 1000)
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP5 + id*self.shared_memory_size] = (np.int32)(T * 1000) + float(self.config.get('ADC_5_OFFSET', 0))  # ADC_5_OFFSET 값을 적용하여 보정
 
                             I_mA = (np.float32)(message.data[12] << 8 | message.data[13])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
                             T = -10 + (I_mA - 4) * (110) / 16                             
-                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP6 + id*self.shared_memory_size] = (np.int32)(T * 1000)
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP6 + id*self.shared_memory_size] = (np.int32)(T * 1000) + float(self.config.get('ADC_6_OFFSET', 0))  # ADC_6_OFFSET 값을 적용하여 보정
 
                             I_mA = (np.float32)(message.data[14] << 8 | message.data[15])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
                             T = -10 + (I_mA - 4) * (110) / 16                   
-                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP7 + id*self.shared_memory_size] = (np.int32)(T * 1000)
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP7 + id*self.shared_memory_size] = (np.int32)(T * 1000) + float(self.config.get('ADC_7_OFFSET', 0))  # ADC_7_OFFSET 값을 적용하여 보정
 
                             I_mA = (np.float32)(message.data[16] << 8 | message.data[17])*0.001 # 0.001은 유닛보드에서 * 1000이 되므로 여기서 0.001로 나누어줌.
                             T = -10 + (I_mA - 4) * (110) / 16                   #-10 ~ 100 C -> 4mA ~ 20mA  유닛보드에서 * 1000이 되므로 여기서 4->4000, 16->16
-                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP8 + id*self.shared_memory_size] = (np.int32)(T * 1000)
+                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP8 + id*self.shared_memory_size] = (np.int32)(T * 1000) + float(self.config.get('ADC_8_OFFSET', 0))  # ADC_8_OFFSET 값을 적용하여 보정
                             
                             # ADC 값 (원시값 그대로 저장. 원시값 자체가 mA * 1000 스케일이므로 사용하는 곳에서 0.001을 곱해 mA로 환산함)
                             self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC1 + id*self.shared_memory_size] = (np.int32)(message.data[2] << 8 | message.data[3])
@@ -123,7 +123,7 @@ class UnitBoardCanFdReceive(threading.Thread):
                             
                             # 탱크 종류 1: 발효, 2: 제성, 3: 숙성, 4: 제품, 5: 냉각수, 6: 물, 7: 밑술, 8: 펌프, 9:기타
 
-                            if int(self.config['TANK_TYPE']) == 1 or int(self.config['TANK_TYPE']) == 2: #발효, 제성
+                            if int(self.config['TANK_TYPE']) == ConstDefine.TANK_TYPE_FERMENTATION or int(self.config['TANK_TYPE']) == ConstDefine.TANK_TYPE_MATURATION: #발효, 제성
                                 rs485_1 = (np.int32)(message.data[18] << 8 | message.data[19])
                                 self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_RPM + id*self.shared_memory_size] = rs485_1       #보드에 따라 RPM 또는 다른 센서 값
                                 rs485_2 = (np.int32)(message.data[20] << 8 | message.data[21])
@@ -137,10 +137,33 @@ class UnitBoardCanFdReceive(threading.Thread):
                                 self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_EXT_TEMP + id*self.shared_memory_size] = ext_temp      #외부 온도 값
                                 ext_humi = (np.int32)(message.data[34] << 8 | message.data[35])
                                 self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_EXT_HUMI + id*self.shared_memory_size] = ext_humi      #외부 습도 값
+                                #
+                                if int(self.config.get('BRIX_NUM', 0)):
+                                    # brix 센서가 아날로그라면
+                                    analog_brix_sensor = False
+                                    for x in range(int(self.config.get('ADC_NUM', 0))):
+                                        adc_usage = int(self.config.get(f'ADC_{x+1}', 0))
+                                        if adc_usage == 3:    #당도 센서이면
+                                            brix_sensor = (self.shared_memory_u[(ConstDefine.SHARED_MEMORY_OFFSET_ADC1 + x) + id*self.shared_memory_size]*0.001-4.)*5.5 # 0~88/min, 당도센서 4~20mA, 4mA=0brix, 20mA=88brix, 1mA=5.5brix
+                                            if brix_sensor < 0.:
+                                                brix_sensor = 0.
 
+                                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_BRIX + id*self.shared_memory_size] = brix_sensor +  float(self.config.get(f'ADC_{x+1}_OFFSET', 0))  # ADC_BRIXX_OFFSET 값을 적용하여 보정
+                                            analog_brix_sensor = True
+                                    # brix 센서가 485라면
+                                    if analog_brix_sensor == False:
+                                        if int(self.config.get('RS485_1_USAGE', 0)) >= 17 and int(self.config.get('RS485_1_USAGE', 0)) <= 19:
+                                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_BRIX + id*self.shared_memory_size] = rs485_1
+                                        elif int(self.config.get('RS485_2_USAGE', 0)) >= 17 and int(self.config.get('RS485_2_USAGE', 0)) <= 19:
+                                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_BRIX + id*self.shared_memory_size] = rs485_2
+                                        elif int(self.config.get('RS485_3_USAGE', 0)) >= 17 and int(self.config.get('RS485_3_USAGE', 0)) <= 19:
+                                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_BRIX + id*self.shared_memory_size] = rs485_3  
+                                        elif int(self.config.get('RS485_4_USAGE', 0)) >= 17 and int(self.config.get('RS485_4_USAGE', 0)) <= 19:
+                                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_BRIX + id*self.shared_memory_size] = rs485_4
+                                #
                                 # rs232_1 = (np.float32)(message.data[25] << 8 | message.data[26]) * 0.001
                                 # self.shared_memory_u[0x27 + id*self.shared_memory_size] = (np.int32)(rs232_1)      #보드에 따라 Flower 또는 다른 센서 값
-                            elif int(self.config['TANK_TYPE']) == 3: #숙성
+                            elif int(self.config['TANK_TYPE']) == ConstDefine.TANK_TYPE_AGING: #숙성
                                 rs485_1 = (np.int32)(message.data[18] << 8 | message.data[19])
                                 self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_PH1 + id*self.shared_memory_size] = rs485_1       #보드에 따라 PH1 또는 다른 센서 값
                                 rs485_2 = (np.int32)(message.data[20] << 8 | message.data[21])
@@ -149,23 +172,28 @@ class UnitBoardCanFdReceive(threading.Thread):
                                 self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_PH3 + id*self.shared_memory_size] = rs485_3      #보드에 따라 PH3 또는 다른 센서 값
                                 rs485_4 = (np.int32)(message.data[24] << 8 | message.data[25])
                                 self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_PH4 + id*self.shared_memory_size] = rs485_4      #보드에 따라 PH4 또는 다른 센서 값 
-                            elif int(self.config['TANK_TYPE']) == 4: #제품
+                            elif int(self.config['TANK_TYPE']) == ConstDefine.TANK_TYPE_PRODUCT: #제품
                                 rs485_1 = (np.int32)(message.data[18] << 8 | message.data[19])
                                 self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_RPM + id*self.shared_memory_size] = rs485_1       #보드에 따라 RPM 또는 다른 센서 값
                                 rs485_2 = (np.int32)(message.data[20] << 8 | message.data[21])
                                 self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_LOAD_CELL + id*self.shared_memory_size] = rs485_2      #보드에 따라 load cell 또는 다른 센서 값
                                 rs485_3 = (np.int32)(message.data[22] << 8 | message.data[23])
                                 self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_PH1 + id*self.shared_memory_size] = rs485_3      #보드에 따라 ph 또는 다른 센서 값
-                            elif int(self.config['TANK_TYPE']) == 5: #냉각수
+                            elif int(self.config['TANK_TYPE']) == ConstDefine.TANK_TYPE_CHILLING_WATER: #냉각수
                                 pass
-                            elif int(self.config['TANK_TYPE']) == 6: #물
+                            elif int(self.config['TANK_TYPE']) == ConstDefine.TANK_TYPE_WATER: #물
                                 if int(self.config.get('FLOW_NUM', 0)):
                                     # flower 센서가 아날로그라면
                                     analog_flower_sensor = False
                                     for x in range(int(self.config.get('ADC_NUM', 0))):
                                         adc_usage = int(self.config.get(f'ADC_{x+1}', 0))
                                         if adc_usage == 2:    #유량센서이면
-                                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_FLOWER + id*self.shared_memory_size] = self.shared_memory_u[(ConstDefine.SHARED_MEMORY_OFFSET_ADC1 + x) + id*self.shared_memory_size]
+                                            flow_sensor = (self.shared_memory_u[(ConstDefine.SHARED_MEMORY_OFFSET_ADC1 + x) + id*self.shared_memory_size]*0.001-4.)*18.75 # 0~300l/min, 유량센서 4~20mA, 4mA=0l/min, 20mA=300l/min, 1mA=18.75l/min
+                                            if flow_sensor < 0.:
+                                                flow_sensor = 0.
+                                                
+                                            # self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_FLOWER + id*self.shared_memory_size] = self.shared_memory_u[(ConstDefine.SHARED_MEMORY_OFFSET_ADC1 + x) + id*self.shared_memory_size]
+                                            self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_FLOWER + id*self.shared_memory_size] = flow_sensor +  float(self.config.get(f'ADC_{x+1}_OFFSET', 0))  # ADC_FLOWX_OFFSET 값을 적용하여 보정
                                             analog_flower_sensor = True
                                     # flower 센서가 485라면
                                     if analog_flower_sensor == False:
@@ -177,11 +205,11 @@ class UnitBoardCanFdReceive(threading.Thread):
                                             self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_FLOWER + id*self.shared_memory_size] = rs485_3  
                                         elif int(self.config.get('RS485_4_USAGE', 0)) >= 14 and int(self.config.get('RS485_4_USAGE', 0)) <= 16:
                                             self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_FLOWER + id*self.shared_memory_size] = rs485_4
-                            elif int(self.config['TANK_TYPE']) == 7: #밑술
+                            elif int(self.config['TANK_TYPE']) == ConstDefine.TANK_TYPE_BASEMENT: #밑술
                                 pass
-                            elif int(self.config['TANK_TYPE']) == 8: #펌프  
+                            elif int(self.config['TANK_TYPE']) == ConstDefine.TANK_TYPE_PUMP: #펌프  
                                 pass
-                            elif int(self.config['TANK_TYPE']) == 9: #기타
+                            elif int(self.config['TANK_TYPE']) == ConstDefine.TANK_TYPE_OTHER: #기타
                                 rs485_1 = (np.int32)(message.data[18] << 8 | message.data[19])
                                 self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_FLOWER + id*self.shared_memory_size] = rs485_1       #보드에 따라 유량량 또는 다른 센서 값
                                 rs485_2 = (np.int32)(message.data[20] << 8 | message.data[21])
@@ -196,11 +224,11 @@ class UnitBoardCanFdReceive(threading.Thread):
                                 
                                 # 냉각수 선택 0 = 사용하지 않음, 1 = CT water 2 = 칠러1, 3 = 칠러2
                                 # 냉각수 선택은 탱크에 종류에 따라 다름
-                                if int(self.config['FEED_WATER_SELECT']) == 1:
+                                if int(self.config['FEED_WATER_SELECT']) == ConstDefine.WATER_TYPE_FEED:
                                     data = self.shared_memory_u[max_unitboard * self.shared_memory_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR]
-                                elif int(self.config['FEED_WATER_SELECT']) == 2:
+                                elif int(self.config['FEED_WATER_SELECT']) == ConstDefine.WATER_TYPE_CHILLER1:
                                     data = self.shared_memory_u[max_unitboard * self.shared_memory_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER1_MOTOR]
-                                elif int(self.config['FEED_WATER_SELECT']) == 3:
+                                elif int(self.config['FEED_WATER_SELECT']) == ConstDefine.WATER_TYPE_CHILLER2:
                                     data = self.shared_memory_u[max_unitboard * self.shared_memory_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER2_MOTOR]
 
                                 if (np.int32)(message.data[31]) == OFF:  #꺼저 있으면 동작
@@ -208,11 +236,11 @@ class UnitBoardCanFdReceive(threading.Thread):
                                     self.water_motor_on = False
                                     # self.shared_memory_u[max_unitboard * self.shared_memory_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR] = data
                                     
-                                    if int(self.config['FEED_WATER_SELECT']) == 1:
+                                    if int(self.config['FEED_WATER_SELECT']) == ConstDefine.WATER_TYPE_FEED:
                                         self.shared_memory_u[max_unitboard * self.shared_memory_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR] = data
-                                    elif int(self.config['FEED_WATER_SELECT']) == 2:
+                                    elif int(self.config['FEED_WATER_SELECT']) == ConstDefine.WATER_TYPE_CHILLER1:
                                         self.shared_memory_u[max_unitboard * self.shared_memory_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER1_MOTOR] = data
-                                    elif int(self.config['FEED_WATER_SELECT']) == 3:
+                                    elif int(self.config['FEED_WATER_SELECT']) == ConstDefine.WATER_TYPE_CHILLER2:
                                         self.shared_memory_u[max_unitboard * self.shared_memory_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER2_MOTOR] = data
                                     
                             # shared_memory_u[0x1F + id*self.shared_memory_size] = (np.int32)(message.data[30])    #inverter 상태
@@ -1029,7 +1057,7 @@ class UnitBoard:
         
         # 물탱크 유닛보드이면 물탱크 무게 측정 쓰레드 생성
         # 탱크 종류 0 = 사용하지 않음, 1: 발효, 2: 제성, 3: 숙성, 4: 제품, 5: 냉각수, 6: 물, 7: 밑술, 8: 펌프, 9:기타
-        if int(self.config['TANK_TYPE']) == 6:
+        if int(self.config['TANK_TYPE']) == ConstDefine.TANK_TYPE_WATER:
             water_tank_thread = UnitBoardWaterTank(id, logging, shared_memory_u, self.shared_memory_size, unit_semaphor, 
             self.config, self.common_config, command_queue)
             water_tank_thread.start()
@@ -1432,7 +1460,7 @@ class UnitBoard:
                                                 "SEND" : True}
                                 command_queue.put(message, block=False)
                             elif command['CTRL'][0]['SENSOR_ID'] == '1900' or command['CTRL'][0]['SENSOR_ID'] == '1901' or command['CTRL'][0]['SENSOR_ID'] == '1902':    # 물탱크 모터 번호 1900 = 원수 1901 = 칠러1 1902 = 칠러2 
-                               if self.config['TANK_TYPE'] == '6':   # 물탱크 유닛보드이면
+                               if int(self.config['TANK_TYPE']) == ConstDefine.TANK_TYPE_WATER:   # 물탱크 유닛보드이면
                                     if command['CTRL'][0]['SENSOR_ID'] == '1900':
                                         x = self.config["SOLVALVE1"]
                                     elif command['CTRL'][0]['SENSOR_ID'] == '1901':

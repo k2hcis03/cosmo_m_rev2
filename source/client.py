@@ -323,7 +323,7 @@ class UnitBoardGetStatus(threading.Thread):
                         if x < len(brix_index):
                             mem_idx = base_index + brix_index[x]          #brix 값이 저장되는 shared_memory 위치는 ADC_NUM과 상관없이 1개이기 때문에 x가 0이여도 됨.
                             if mem_idx < len(self.shared_memory):
-                                self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1700+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
+                                self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1700+x}","VALUE":f"{self.shared_memory[mem_idx]:0.2F}"})
 
                     for x in range(int(unit_config.get('PH_NUM', 0))):
                         if x < len(ph_index):
@@ -335,10 +335,10 @@ class UnitBoardGetStatus(threading.Thread):
                     for x in range(int(unit_config.get('FLOW_NUM', 0))):
                         if x < len(flow_index):
                             mem_idx = base_index + flow_index[0]          #flow 값이 저장되는 shared_memory 위치는 FLOW_NUM 상관없이 1개
-                            flow_sensor = (self.shared_memory[mem_idx]*0.001-4.)*18.75
-                            if flow_sensor < 0.:
-                                flow_sensor = 0.
-                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{2000+x_index}","VALUE":f"{flow_sensor:0.2F}"}) # 0~300l/min
+                            #flow_sensor = (self.shared_memory[mem_idx]*0.001-4.)*18.75
+                            #if flow_sensor < 0.:
+                            #    flow_sensor = 0.
+                            self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{2000+x_index}","VALUE":f"{self.shared_memory[mem_idx]:0.2F}"}) # 0~300l/min
                             x_index += 1
                     # CT 센서 전송 기능  센서 번호 김휴정 박사와 협의 필요 
                     for x in range(int(unit_config.get('ADC_NUM', 0))):
