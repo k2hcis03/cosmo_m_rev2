@@ -25,6 +25,8 @@ log/
 .idea/
 *.swp
 *.swo
+.omc/
+graft/
 
 # OS files
 .DS_Store
@@ -50,3 +52,4 @@ ref/
 data/
 uniboardserver/
 firmware/firmware.bin
+
