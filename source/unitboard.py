@@ -445,6 +445,10 @@ class UnitBoardWaterTank(threading.Thread):
                     "CMD":"SET_GPIO",
                     "VALUE" : self.gpio_value}
                     self.command_queue.put(message, block=False) 
+                #    time.sleep(0.1)  # 0.1초 지연
+                #else:
+                #    time.sleep(0.5)  # 0.5초마다 
+
                 self.gpio_value_old = self.gpio_value.copy()
             except Exception as e:
                 self.logging.error(f'id: {self.id} UnitBoardWaterTank Thread Error: {e}')
@@ -523,7 +527,7 @@ class UnitBoardTempControl(threading.Thread):
                                 "SPEED" : int(self.config["MIN_RPM"]), 
                                 "DIR"   : 'RV',            #FW = forward, RV = reverse
                                 "ONOFF" : 'ON', 
-                                "TIME" : int(self.cold_valve_on_time * 0.1 + 10),  # 냉각수 밸브 ON 시간 + 10초
+                                "TIME" : int(self.cold_valve_on_time * 0.1 + 10),  # 냉각수 밸브 ON 시간 + 10초 (여유시간)
                                 "SEND" : False}    
                     self.command_queue.put(message, block=False)
             else:
@@ -800,6 +804,10 @@ class UnitBoardTempControl(threading.Thread):
                                     if self.config["TEMP_CONTROL"] == 'PID':
                                         inc = self.pid(analog2)
                                         self.cold_valve_on_time = round(inc)                #소수점 첫번째에서 반올림
+
+                                        #if self.cold_valve_on_time > 0 and self.cold_valve_on_time < int(self.config["PUMP_MIN_TIME"]):
+                                        #    self.cold_valve_on_time = int(self.config["PUMP_MIN_TIME"])    
+
                                         self.cold_valve_on_time_save = self.cold_valve_on_time
                                         self.pid_timer_call_time = 99                       #타이머 호출 회수 -1
                                         pid_t = Timer(0.1, self.pid_task).start()           #0.1초 타이머
