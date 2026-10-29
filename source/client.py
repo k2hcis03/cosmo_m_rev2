@@ -310,9 +310,12 @@ class UnitBoardGetStatus(threading.Thread):
                             else:
                                 mem_idx = base_index + gpi_index[0]     #gpi 값이 저장되는 shared_memory 위치는 VALVE_NUM 상관없이 1개
                                 if mem_idx < len(self.shared_memory):
-                                    self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1500+x}","VALUE":                   # 상단, 하단 솔밸브
-                                        f"{((self.shared_memory[mem_idx] >> x) ^ 0x00000001) & 0x00000001}"})
-
+                                    if int(unit_config.get(f'ENCODER{x+1}_SIGNAL', 0)) == 1:  # Active High
+                                        self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1500+x}","VALUE":                   # 상단, 하단 솔밸브
+                                            f"{(self.shared_memory[mem_idx] >> x) & 0x00000001}"})
+                                    else:   # Active Low
+                                        self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1500+x}","VALUE":                   # 상단, 하단 솔밸브
+                                            f"{((self.shared_memory[mem_idx] >> x) ^ 0x00000001) & 0x00000001}"})
                     for x in range(int(unit_config.get('MOTOR_NUM', 0))): 
                         if x < len(motor_index):
                             mem_idx = base_index + motor_index[x]
@@ -323,7 +326,7 @@ class UnitBoardGetStatus(threading.Thread):
                         if x < len(brix_index):
                             mem_idx = base_index + brix_index[x]          #brix 값이 저장되는 shared_memory 위치는 ADC_NUM과 상관없이 1개이기 때문에 x가 0이여도 됨.
                             if mem_idx < len(self.shared_memory):
-                                self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1700+x}","VALUE":f"{self.shared_memory[mem_idx]:0.2F}"})
+                                self.send_data['VALUES'].append({"TANK_ID":f"{unit_config.get('TANK_ID', 0)}","SENSOR_ID":f"{1700+x}","VALUE":f"{self.shared_memory[mem_idx]*0.001:0.2F}"})
 
                     for x in range(int(unit_config.get('PH_NUM', 0))):
                         if x < len(ph_index):

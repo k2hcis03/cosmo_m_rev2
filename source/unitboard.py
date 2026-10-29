@@ -23,6 +23,12 @@ import queue
 
 ON = 1
 OFF = 0
+
+# 레시피 동작 시, 수동으로 물탱크 모터를 제어해야 함.
+g_water_tank_motor = 0
+g_water_tank_chiller1_motor = 0
+g_water_tank_chiller2_motor = 0
+
 # g_file_path = "./data/JSON_Ref_Stage101.txt"
 #
 class UnitBoardCanFdReceive(threading.Thread):
@@ -147,7 +153,7 @@ class UnitBoardCanFdReceive(threading.Thread):
                                             brix_sensor = (self.shared_memory_u[(ConstDefine.SHARED_MEMORY_OFFSET_ADC1 + x) + id*self.shared_memory_size]*0.001-4.)*5.5 # 0~88/min, 당도센서 4~20mA, 4mA=0brix, 20mA=88brix, 1mA=5.5brix
                                             if brix_sensor < 0.:
                                                 brix_sensor = 0.
-
+                                            brix_sensor *= 1000.        # 부동 소수점
                                             self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_BRIX + id*self.shared_memory_size] = brix_sensor +  float(self.config.get(f'ADC_{x+1}_OFFSET', 0))  # ADC_BRIXX_OFFSET 값을 적용하여 보정
                                             analog_brix_sensor = True
                                     # brix 센서가 485라면
@@ -424,10 +430,11 @@ class UnitBoardWaterTank(threading.Thread):
     def run(self):
         chiller1_motor_log = False
         chiller2_motor_log = False
+        global g_water_tank_motor, g_water_tank_chiller1_motor, g_water_tank_chiller2_motor  #수동 동작이 우선순위가 높음
+
         while True:
             try:
-                time.sleep(0.5)  # 0.5초마다 
-                
+                # time.sleep(0.5)  # 0.5초마다 
                 max_unitboard = int(self.common_config['MAXUNITBOARD'])
                 # 공유 메모리에서 물탱크 모터 상태 값 읽기
                 self.unit_semaphor.acquire()
@@ -436,36 +443,43 @@ class UnitBoardWaterTank(threading.Thread):
                 chiller2_motor = self.shared_memory_u[max_unitboard * self.shared_memory_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER2_MOTOR]
                 self.unit_semaphor.release()
                 # 물탱크 모터 제어 명령어 전송
-                if water_motor:
-                    # self.logging.info(f'id: {self.id} water motor is on')
+                if g_water_tank_motor == 0:     
+                    if water_motor:
+                        # self.logging.info(f'id: {self.id} water motor is on')
+                        self.gpio_value[int(self.config['SOLVALVE1'])] = True
+                    else:
+                        self.gpio_value[int(self.config['SOLVALVE1'])] = False
+                else:
                     self.gpio_value[int(self.config['SOLVALVE1'])] = True
-                else:
-                    self.gpio_value[int(self.config['SOLVALVE1'])] = False
-                
                 # 칠러1 모터 제어 명령어 전송
-                if chiller1_motor:
-                    if not chiller1_motor_log:
-                        self.logging.info(f'id: {self.id} chiller1 motor is on')
-                        chiller1_motor_log = True
+                if g_water_tank_chiller1_motor == 0:
+                    if chiller1_motor:
+                        if not chiller1_motor_log:
+                            self.logging.info(f'id: {self.id} chiller1 motor is on')
+                            chiller1_motor_log = True
+                        self.gpio_value[int(self.config['SOLVALVE2'])] = True
+                    else:
+                        if chiller1_motor_log:
+                            self.logging.info(f'id: {self.id} chiller1 motor is off')
+                            chiller1_motor_log = False
+                        self.gpio_value[int(self.config['SOLVALVE2'])] = False
+                else:
                     self.gpio_value[int(self.config['SOLVALVE2'])] = True
-                else:
-                    if chiller1_motor_log:
-                        self.logging.info(f'id: {self.id} chiller1 motor is off')
-                        chiller1_motor_log = False
-                    self.gpio_value[int(self.config['SOLVALVE2'])] = False
-
                 # 칠러2 모터 제어 명령어 전송   
-                if chiller2_motor:
-                    if not chiller2_motor_log:
-                        self.logging.info(f'id: {self.id} chiller2 motor is on')
-                        chiller2_motor_log = True
-                    # 칠러2 모터 제어 명령어 전송
-                    self.gpio_value[int(self.config['SOLVALVE3'])] = True
+                if g_water_tank_chiller2_motor == 0:
+                    if chiller2_motor:
+                        if not chiller2_motor_log:
+                            self.logging.info(f'id: {self.id} chiller2 motor is on')
+                            chiller2_motor_log = True
+                        # 칠러2 모터 제어 명령어 전송
+                        self.gpio_value[int(self.config['SOLVALVE3'])] = True
+                    else:
+                        if chiller2_motor_log:
+                            self.logging.info(f'id: {self.id} chiller2 motor is off')
+                            chiller2_motor_log = False
+                        self.gpio_value[int(self.config['SOLVALVE3'])] = False
                 else:
-                    if chiller2_motor_log:
-                        self.logging.info(f'id: {self.id} chiller2 motor is off')
-                        chiller2_motor_log = False
-                    self.gpio_value[int(self.config['SOLVALVE3'])] = False
+                    self.gpio_value[int(self.config['SOLVALVE3'])] = True
 
                 if self.gpio_value != self.gpio_value_old:
                     self.logging.info(f'id: {self.id} weight_valve gpio value is changed')
@@ -473,9 +487,9 @@ class UnitBoardWaterTank(threading.Thread):
                     "CMD":"SET_GPIO",
                     "VALUE" : self.gpio_value}
                     self.command_queue.put(message, block=False) 
-                #    time.sleep(0.1)  # 0.1초 지연
-                #else:
-                #    time.sleep(0.5)  # 0.5초마다 
+                    time.sleep(0.1)  # 0.1초 지연
+                else:
+                    time.sleep(0.5)  # 0.5초마다 
 
                 self.gpio_value_old = self.gpio_value.copy()
             except Exception as e:
@@ -533,6 +547,7 @@ class UnitBoardTempControl(threading.Thread):
         self.common_config = common_config
         self.cold_valve_on_time_save = 0          # 냉각수 밸브 ON 시간 저장 변수
         self.motor_pid_start_time = 0
+   
     def set_cold_valve(self, value):
         self.cold_valve_status = value
         x = self.config["SOLVALVE2"]        #냉각수 밸브 I/O 번호
@@ -797,7 +812,12 @@ class UnitBoardTempControl(threading.Thread):
                                     # config.ini에서 ADC_1가 사용안하면 아래서 analog1~analog8위치를 보정
                                     # 아래 코드 ADC_0 ~ 값마다 정확한 보정 필요 현재는 잠시 수정함.
                                     offset = 0
+                                    adc_temp_offset = 0
                                     for i in range(int(self.config["ADC_NUM"])):
+                                        if int(self.config[f"ADC_{i+1}"]) == 1:
+                                            adc_temp_offset += 1
+                                            if adc_temp_offset == 2:
+                                                break
                                         if int(self.config[f"ADC_{i+1}"]) == 0:
                                             offset += 1
                                     analog2 = self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_ADC_TEMP2 + self.id*self.shared_memory_size + offset] * 0.001 #온도 센서 2 온도 제어에 사용하는 하단 온도센서
@@ -833,8 +853,8 @@ class UnitBoardTempControl(threading.Thread):
                                         inc = self.pid(analog2)
                                         self.cold_valve_on_time = round(inc)                #소수점 첫번째에서 반올림
 
-                                        #if self.cold_valve_on_time > 0 and self.cold_valve_on_time < int(self.config["PUMP_MIN_TIME"]):
-                                        #    self.cold_valve_on_time = int(self.config["PUMP_MIN_TIME"])    
+                                        if self.cold_valve_on_time > 0 and self.cold_valve_on_time < int(self.config["PUMP_MIN_TIME"]):
+                                            self.cold_valve_on_time = int(self.config["PUMP_MIN_TIME"])    
 
                                         self.cold_valve_on_time_save = self.cold_valve_on_time
                                         self.pid_timer_call_time = 99                       #타이머 호출 회수 -1
@@ -1029,6 +1049,10 @@ class UnitBoard:
         old_stage = 1000
         self.dir_name = f"/home/pi/Projects/cosmo-m/ref/unit_board{id}"                # data 기록 디렉토리 생성 ref data 저장 디렉토리
        
+        global g_water_tank_motor
+        global g_water_tank_chiller1_motor
+        global g_water_tank_chiller2_motor
+
         try:
             self.config_file = configparser.ConfigParser()  ## 클래스 객체 생성
             self.config_file.read(ConstDefine.CONFIG_PATH)  ## 파일 읽기
@@ -1611,6 +1635,15 @@ class UnitBoard:
                             message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = False,
                                         data=bytearray(data))
                             self.transmit_can_message(message, logging, id)
+
+                            if int(self.config['TANK_TYPE']) == ConstDefine.TANK_TYPE_WATER:   # 물탱크 유닛보드이면
+                                if int(command['CHANNEL']) == int(self.config["SOLVALVE1"]):
+                                    g_water_tank_motor = int(command['VALUE'])
+                                elif int(command['CHANNEL']) == int(self.config["SOLVALVE2"]):
+                                    g_water_tank_chiller1_motor = int(command['VALUE'])
+                                elif int(command['CHANNEL']) == int(self.config["SOLVALVE3"]):
+                                    g_water_tank_chiller2_motor = int(command['VALUE'])
+                                    
                     elif command['CMD'] == 'PING_UNIT_BOARD':
                         if int(self.config['ADDRESS']) != 999:
                             data = [ConstDefine.PING_UNIT_BOARD_COMMAND]                 
