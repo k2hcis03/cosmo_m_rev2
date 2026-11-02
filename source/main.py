@@ -303,6 +303,16 @@ class CosmoMain(threading.Thread):
                 message['UNIT_ID'] = 1              # 1은 변경되어도 됨
                 self.dispatch_to_unit(1, message)
                 matching = True
+            elif message['CMD'] == 'MEASURE_FLOW':  # 브로드 캐스팅
+                matching = False
+                for x in range(MAXUNITBOARD):
+                    config = self.common_config[f'unit_board{x}']
+                    if self.find_tank_id_to_unit_id(message['TANK_ID'], config):
+                        message['UNIT_ID'] = x
+                        self.dispatch_to_unit(x, message)
+                        matching = True
+                if not matching:
+                    logging.info(f"Wrong Unit board id{message['TANK_ID']}")
 def main():
     config_file = configparser.ConfigParser()  ## 클래스 객체 생성
     # config.ini 없이는 동작이 불가능하므로, 실패 원인을 사용자에게 명확히 알리고 종료한다.

@@ -28,7 +28,6 @@ OFF = 0
 g_water_tank_motor = 0
 g_water_tank_chiller1_motor = 0
 g_water_tank_chiller2_motor = 0
-
 # g_file_path = "./data/JSON_Ref_Stage101.txt"
 #
 class UnitBoardCanFdReceive(threading.Thread):
@@ -201,6 +200,7 @@ class UnitBoardCanFdReceive(threading.Thread):
                                             # self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_FLOWER + id*self.shared_memory_size] = self.shared_memory_u[(ConstDefine.SHARED_MEMORY_OFFSET_ADC1 + x) + id*self.shared_memory_size]
                                             self.shared_memory_u[ConstDefine.SHARED_MEMORY_OFFSET_FLOWER + id*self.shared_memory_size] = flow_sensor +  float(self.config.get(f'ADC_{x+1}_OFFSET', 0))  # ADC_FLOWX_OFFSET 값을 적용하여 보정
                                             analog_flower_sensor = True
+                                            break
                                     # flower 센서가 485라면
                                     if analog_flower_sensor == False:
                                         if int(self.config.get('RS485_1_USAGE', 0)) >= 14 and int(self.config.get('RS485_1_USAGE', 0)) <= 16:
@@ -397,6 +397,13 @@ class UnitBoardCanFdReceive(threading.Thread):
                             pass                              
                         else:
                             self.logging.warning(f'id: {id} unit board HOLD_TX_COMMAND is wrong response')
+                    elif message.data[0] == ConstDefine.MEASURE_FLOW_COMMAND:
+                        if message.data[1] == 1:            # 1 : 정상, 0 : 오류
+                            data = (message.data[2] << 8) | (message.data[3])
+                            self.logging.warning(f'id: {id} unit board MEASURE_FLOW_COMMAND value is : {data * 0.01 : 0.2F}')                            
+                        else:
+                            self.logging.warning(f'id: {id} unit board MEASURE_FLOW_COMMAND is wrong response')
+                            
                     # LED를 
                     message = {"UNIT_ID" : id,                  
                                 "CMD":"LED_STATUS"}
@@ -431,7 +438,6 @@ class UnitBoardWaterTank(threading.Thread):
         chiller1_motor_log = False
         chiller2_motor_log = False
         global g_water_tank_motor, g_water_tank_chiller1_motor, g_water_tank_chiller2_motor  #수동 동작이 우선순위가 높음
-
         while True:
             try:
                 # time.sleep(0.5)  # 0.5초마다 
@@ -484,14 +490,25 @@ class UnitBoardWaterTank(threading.Thread):
                 if self.gpio_value != self.gpio_value_old:
                     self.logging.info(f'id: {self.id} weight_valve gpio value is changed')
                     message = {"UNIT_ID" : self.id,                  
-                    "CMD":"SET_GPIO",
-                    "VALUE" : self.gpio_value}
+                        "CMD":"SET_GPIO",
+                        "VALUE" : self.gpio_value}
                     self.command_queue.put(message, block=False) 
                     time.sleep(0.1)  # 0.1초 지연
                 else:
                     time.sleep(0.5)  # 0.5초마다 
-
                 self.gpio_value_old = self.gpio_value.copy()
+                
+                if self.shared_memory_u[max_unitboard * self.shared_memory_size + ConstDefine.SHARED_MEMORY_OFFSET_TRIGGER_WEIGHT] == 1:
+                    message = {"UNIT_ID" : self.id,                  
+                                "CMD":"MEASURE_FLOW",
+                                "ON": "True",
+                                "TANK" : self.config['FLOW_SENSOR_TANK']}  # 물탱크
+                    self.command_queue.put(message, block=False)
+                    
+                    self.unit_semaphor.acquire()
+                    self.shared_memory_u[max_unitboard * self.shared_memory_size + ConstDefine.SHARED_MEMORY_OFFSET_TRIGGER_WEIGHT] = 0
+                    self.unit_semaphor.release()
+                    
             except Exception as e:
                 self.logging.error(f'id: {self.id} UnitBoardWaterTank Thread Error: {e}')
                 print(e)
@@ -1035,7 +1052,13 @@ class UnitBoard:
         elif int(self.config['FEED_WATER_SELECT']) == 3:
             shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER2_MOTOR] = data
         unit_semaphor.release()
-
+    
+    def get_adc_number(self, adc_class):
+        for i in range(int(self.config['ADC_NUM'])):
+            if int(self.config[f'ADC_{i+1}']) == adc_class:
+                return i + 1
+        return 0
+    
     def unit_process(self, n, shm, arr, semaphor, receive_queue, cmd_queue, logging):
         new_shm = shared_memory.SharedMemory(name=shm)
         shared_memory_u = np.ndarray(arr.shape, dtype=arr.dtype, buffer=new_shm.buf)
@@ -1372,9 +1395,10 @@ class UnitBoard:
 
                             if command['VALUE'] == ON:
                                 data = data | (1 << id)
+                                shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_TRIGGER_WEIGHT] = 1    
                             else:
                                 data = data & ~(1 << id)
-                            
+                                shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_TRIGGER_WEIGHT] = 0
                             # shared_memory_u[max_unitboard * shared_mem_size + ConstDefine.SHARED_MEMORY_OFFSET_WATER_MOTOR] = data
                             # 냉각수 선택 0 = 사용하지 않음, 1 = CT water 2 = 칠러1, 3 = 칠러2
                             # 냉각수 선택은 탱크에 종류에 따라 다름
@@ -1477,11 +1501,15 @@ class UnitBoard:
                                                     "WEIGHT" : temp, 
                                                     "ONTIME" : ontime}  
                                 else :  # 물공급 밸브 OFF
+                                    value = OFF
+                                    temp = 0 # 소수점 1자리까지 유효 ex) 38.2 ->38.2kg
+                                    ontime = 0
                                     message = {"UNIT_ID" : id,                  
-                                                "CMD":"SET_GPIO_EX",
-                                                "CHANNEL": self.config["SOLVALVE1"],
-                                                "VALUE" : OFF,
-                                                "SEND" : True}
+                                                "CMD":"WEIGHT_VALVE",
+                                                "CHANNEL": x,
+                                                "VALUE" : value,
+                                                "WEIGHT" : temp, 
+                                                "ONTIME" : ontime} 
                                 command_queue.put(message, block=False)
                             elif command['CTRL'][0]['SENSOR_ID'] == '1900' or command['CTRL'][0]['SENSOR_ID'] == '1901' or command['CTRL'][0]['SENSOR_ID'] == '1902':    # 물탱크 모터 번호 1900 = 원수 1901 = 칠러1 1902 = 칠러2 
                                if int(self.config['TANK_TYPE']) == ConstDefine.TANK_TYPE_WATER:   # 물탱크 유닛보드이면
@@ -1669,6 +1697,26 @@ class UnitBoard:
                             message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = False,
                                         data=bytearray(data))
                             self.transmit_can_message(message, logging, id) 
+                    elif command['CMD'] == 'MEASURE_FLOW':
+                        if int(self.config['ADDRESS']) != 999:
+                            data = [ConstDefine.MEASURE_FLOW_COMMAND]     
+
+                            if command['ON'] == 'True':
+                                data.append(1)  # HOLD_TX_TIME은 초 단위로 전송          
+                            else:
+                                data.append(0)  # HOLD_TX_TIME은 초 단위로 전송   
+
+                            adc_channel = self.get_adc_number(2)      # flow sensor 번호
+                            data.append(adc_channel)                    # ADC 채널 (flow sensor가 연결 된)
+                            data.append(int(command['TANK']))            # tank 번호 (flow sensor가 연결 된 )
+                            data.append(int(float(self.config['K_CAL']) * 100))         # 보상 값
+                            crc = self.crc16(data)
+                            data.append(crc & 0xFF)
+                            data.append((crc >> 8) & 0xFF)
+                            # 아래 명령어는 브로드 캐스팅으로 전송
+                            message = can.Message(is_extended_id=False, is_fd = True, arbitration_id=id, bitrate_switch = False,
+                                        data=bytearray(data))
+                            self.transmit_can_message(message, logging, id)     
                 #
                 # 2초마다 유닛보드 펌웨어 버전(GET_VERSION)을 요청한다.
                 # command_queue.get()으로 블로킹되는 루프 특성상, 명령이 들어와 루프가 돌 때
