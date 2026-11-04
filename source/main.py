@@ -183,6 +183,16 @@ class CosmoMain(threading.Thread):
                         matching = True
                 if not matching:
                     logging.info(f"Wrong Unit board id{message['TANK_ID']}")
+            elif message['CMD'] == 'SET_GPIO_EX':
+                matching = False
+                for x in range(MAXUNITBOARD):
+                    config = self.common_config[f'unit_board{x}']
+                    if self.find_tank_id_to_unit_id(message['TANK_ID'], config):
+                        message['UNIT_ID'] = x
+                        self.dispatch_to_unit(x, message)
+                        matching = True
+                if not matching:
+                    logging.info(f"Wrong Unit board id{message['TANK_ID']}")
             elif message['CMD'] == 'GET_ADC':  
                 matching = False
                 for x in range(MAXUNITBOARD):

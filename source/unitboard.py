@@ -498,6 +498,7 @@ class UnitBoardWaterTank(threading.Thread):
                     time.sleep(0.5)  # 0.5초마다 
                 self.gpio_value_old = self.gpio_value.copy()
                 
+                #아래 명령어는 유닛보드로 시작을 보내고 끝내는 것은 유닛보드에서 자체적으로 수행
                 if self.shared_memory_u[max_unitboard * self.shared_memory_size + ConstDefine.SHARED_MEMORY_OFFSET_TRIGGER_WEIGHT] == 1:
                     message = {"UNIT_ID" : self.id,                  
                                 "CMD":"MEASURE_FLOW",
@@ -944,6 +945,7 @@ class UnitBoard:
         self.dir_name = None                # data 기록 디렉토리 생성 ref data 저장 디렉토리
         self.motor_unit_board_gpo = 0
         self.firmware_update_watchdog = None    # 펌웨어 업데이트 응답 무응답 대비 타이머
+        self.water_motor_timer = None    # WEIGHT_VALVE 물 모터 정지 타이머
 
     def unit_board_initialize(self, id, logging):
         ######################################################################################################################################################
@@ -1435,7 +1437,16 @@ class UnitBoard:
                             can_fd_receive_thread.water_motor_on_time = current_time  # UnitBoardCanFdReceive에 최신 시간 값 전달
                             can_fd_receive_thread.water_motor_on = True
                             # 유닛보드로 명령어 보내고 물 흐르는 시간 후, 타이머에서 물 모터를 사용하기 위해 타이머 발생
-                            Timer(ontime, self.timer_callback, args=(id, shared_memory_u, unit_semaphor, can_fd_receive_thread)).start()
+                            # 기존 타이머가 있으면 제거하고 command['VALUE'] == ON일 떄만 새로운 타이머 발생
+                            # 타이머를 제거해도 WEIGHT_VALVE 명령어 (1407~)에서 탱크 관련 글로벌 메모리를 클리어 함. 타이머는 단지 시간내에 모터를 끝기 위함
+                            if self.water_motor_timer:
+                                self.water_motor_timer.cancel()  # 기존 타이머가 있으면 취소
+                                self.water_motor_timer = None
+
+                            if command['VALUE'] == ON:
+                                self.water_motor_timer = Timer(ontime, self.timer_callback, args=(id, shared_memory_u, unit_semaphor, can_fd_receive_thread))
+                                self.water_motor_timer.start()
+
                     elif command['CMD'] == 'CTRL':
                         if int(self.config['TANK_ID']) == int(command['TANK_ID']) and int(self.config['ADDRESS']) != 999:
                             if command['CTRL'][0]['SENSOR_ID'] == '1501':    #밸브는 4개 밸브 아이디는 1500부터 시작 1500-> 냉각
