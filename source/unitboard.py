@@ -437,6 +437,9 @@ class UnitBoardWaterTank(threading.Thread):
     def run(self):
         chiller1_motor_log = False
         chiller2_motor_log = False
+        g_water_tank_motor_old = False
+        g_water_tank_chiller1_motor_old = False
+        g_water_tank_chiller2_motor_old = False
         global g_water_tank_motor, g_water_tank_chiller1_motor, g_water_tank_chiller2_motor  #수동 동작이 우선순위가 높음
         while True:
             try:
@@ -449,6 +452,7 @@ class UnitBoardWaterTank(threading.Thread):
                 chiller2_motor = self.shared_memory_u[max_unitboard * self.shared_memory_size + ConstDefine.SHARED_MEMORY_OFFSET_CHILLER2_MOTOR]
                 self.unit_semaphor.release()
                 # 물탱크 모터 제어 명령어 전송
+                motor_status_change = 0
                 if g_water_tank_motor == 0:     
                     if water_motor:
                         # self.logging.info(f'id: {self.id} water motor is on')
@@ -487,7 +491,18 @@ class UnitBoardWaterTank(threading.Thread):
                 else:
                     self.gpio_value[int(self.config['SOLVALVE3'])] = True
 
-                if self.gpio_value != self.gpio_value_old:
+                if g_water_tank_motor_old != g_water_tank_motor:
+                    motor_status_change += 1
+                if g_water_tank_chiller1_motor_old != g_water_tank_chiller1_motor:
+                    motor_status_change += 1
+                if g_water_tank_chiller2_motor_old != g_water_tank_chiller1_motor:
+                    motor_status_change += 1
+
+                g_water_tank_motor_old = g_water_tank_motor
+                g_water_tank_chiller1_motor_old = g_water_tank_chiller1_motor
+                g_water_tank_chiller2_motor_old = g_water_tank_chiller1_motor
+
+                if self.gpio_value != self.gpio_value_old or motor_status_change > 0:
                     self.logging.info(f'id: {self.id} weight_valve gpio value is changed')
                     message = {"UNIT_ID" : self.id,                  
                         "CMD":"SET_GPIO",
